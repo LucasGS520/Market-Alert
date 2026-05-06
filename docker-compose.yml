@@ -1,0 +1,111 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: market
+      POSTGRES_PASSWORD: market_pass
+      POSTGRES_DB: market_alert
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - market_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U market"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - market_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "6379:6379"
+
+  market_scraper:
+    build:
+      context: ./market_scraper
+      dockerfile: Dockerfile
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8001
+    env_file: .env
+    ports:
+      - "8001:8001"
+    networks:
+      - market_net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8001/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  market_alert_api:
+    build:
+      context: ./market_alert
+      dockerfile: Dockerfile
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    env_file: .env
+    ports:
+      - "8000:8000"
+    networks:
+      - market_net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./market_alert/app:/app/app
+
+  market_alert_worker:
+    build:
+      context: ./market_alert
+      dockerfile: Dockerfile
+    command: >
+      celery -A app.workers.celery_app worker
+      --loglevel=info
+      --queues=collection,comparison,default
+      --concurrency=4
+    env_file: .env
+    networks:
+      - market_net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      market_scraper:
+        condition: service_healthy
+
+  market_alert_beat:
+    build:
+      context: ./market_alert
+      dockerfile: Dockerfile
+    command: >
+      celery -A app.workers.celery_app beat
+      --loglevel=info
+      --scheduler=celery.schedulers.PersistentScheduler
+    env_file: .env
+    networks:
+      - market_net
+    depends_on:
+      redis:
+        condition: service_healthy
+
+networks:
+  market_net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:

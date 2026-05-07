@@ -18,7 +18,7 @@ Invariante garantida pelo banco:
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Numeric, func, text
+from sqlalchemy import Boolean, CheckConstraint, DateTime, Float, ForeignKey, Index, Numeric, String, func, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -59,6 +59,13 @@ class PriceHistory(Base):
     collected_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+
+    # Campos de auditoria: preservam o contexto técnico de cada coleta para diagnóstico
+    title: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    seller: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    currency: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    extraction_method: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     # Relações
     monitored_product: Mapped["MonitoredProduct | None"] = relationship(  # noqa: F821

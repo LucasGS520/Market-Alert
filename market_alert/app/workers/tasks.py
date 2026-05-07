@@ -87,9 +87,16 @@ def collector_task(
 
                 try:
                     await collect_product(session, redis, scraper, produto)
-                except (ScraperUnavailableError, ScraperParseError) as exc:
-                    # Celery vai retentar automaticamente (max_retries=3)
+                except ScraperUnavailableError as exc:
                     raise self.retry(exc=exc)
+                except ScraperParseError as exc:
+                    if exc.error_result.retryable:
+                        raise self.retry(exc=exc)
+                    logger.warning(
+                        "erro_permanente_sem_retry",
+                        produto_id=product_id,
+                        error_code=exc.error_result.error_code,
+                    )
 
                 await session.refresh(produto)
                 preco_novo = Decimal(str(produto.current_price)) if produto.current_price else None
@@ -119,8 +126,16 @@ def collector_task(
 
                 try:
                     await collect_competitor(session, redis, scraper, concorrente)
-                except (ScraperUnavailableError, ScraperParseError) as exc:
+                except ScraperUnavailableError as exc:
                     raise self.retry(exc=exc)
+                except ScraperParseError as exc:
+                    if exc.error_result.retryable:
+                        raise self.retry(exc=exc)
+                    logger.warning(
+                        "erro_permanente_sem_retry",
+                        concorrente_id=competitor_id,
+                        error_code=exc.error_result.error_code,
+                    )
 
     asyncio.run(_executar())
 

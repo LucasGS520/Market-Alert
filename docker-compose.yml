@@ -67,15 +67,15 @@ services:
     volumes:
       - ./market_alert/app:/app/app
 
-  market_alert_worker:
+  market_alert_collection_worker:
     build:
       context: ./market_alert
       dockerfile: Dockerfile
     command: >
       celery -A app.workers.celery_app worker
       --loglevel=info
-      --queues=collection,comparison,default
-      --concurrency=4
+      --queues=collection
+      --concurrency=2
     env_file: .env
     networks:
       - market_net
@@ -85,6 +85,24 @@ services:
       redis:
         condition: service_healthy
       market_scraper:
+        condition: service_healthy
+
+  market_alert_comparison_worker:
+    build:
+      context: ./market_alert
+      dockerfile: Dockerfile
+    command: >
+      celery -A app.workers.celery_app worker
+      --loglevel=info
+      --queues=comparison,default
+      --concurrency=4
+    env_file: .env
+    networks:
+      - market_net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   market_alert_beat:

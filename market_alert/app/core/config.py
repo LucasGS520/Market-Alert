@@ -45,6 +45,12 @@ class Settings(BaseSettings):
     # Intervalo mínimo entre notificações do mesmo produto (minutos)
     notification_cooldown_minutes: int = 30
 
+    # ── Rate Limiting de Domínio ───────────────────────────────────────────
+    # Cooldown aplicado ao domínio após CAPTCHA ou bloqueio detectado (segundos).
+    # Impede que outros produtos do mesmo marketplace pressionem o site enquanto
+    # o bloqueio está ativo. Configurável via DOMAIN_CAPTCHA_COOLDOWN_SECONDS.
+    domain_captcha_cooldown_seconds: int = 300
+
     # ── Servidor ───────────────────────────────────────────────────────────
     log_level: str = "INFO"
 

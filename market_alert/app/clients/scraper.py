@@ -11,14 +11,15 @@ Fluxo de comunicação:
 
 Erros tratados:
     ScraperUnavailableError → scraper está fora do ar ou deu timeout
-    ScraperParseError       → scraper rodou mas não conseguiu extrair dados
+    ScraperParseError       → scraper rodou mas não extraiu dados; carrega
+                              ScraperErrorResult com error_code e retryable
 """
 
 import httpx
 import structlog
 
 from app.core.config import settings
-from app.schemas.common import ScraperResult
+from app.schemas.common import ScraperErrorResult, ScraperResult
 
 logger = structlog.get_logger()
 
@@ -29,8 +30,16 @@ class ScraperUnavailableError(Exception):
 
 
 class ScraperParseError(Exception):
-    """Erro de parsing: o scraper rodou mas não extraiu preço da página."""
-    pass
+    """
+    Erro semântico: o scraper rodou mas não extraiu preço da página.
+
+    Carrega o contrato completo do scraper para que a camada de negócio
+    possa distinguir erros retentáveis de permanentes via error_result.retryable.
+    """
+
+    def __init__(self, error_result: ScraperErrorResult) -> None:
+        self.error_result = error_result
+        super().__init__(error_result.message)
 
 
 class ScraperClient:
@@ -76,10 +85,22 @@ class ScraperClient:
             except httpx.TimeoutException as exc:
                 raise ScraperUnavailableError(f"Timeout ao chamar scraper: {exc}") from exc
 
-            # HTTP 422 significa que o scraper rodou mas não encontrou preço
+            # HTTP 422: scraper rodou mas falhou semanticamente (preço não encontrado,
+            # CAPTCHA, bloqueio etc.). O corpo contém o contrato ScrapeError completo.
             if response.status_code == 422:
                 data = response.json()
-                raise ScraperParseError(data.get("detail", "Não foi possível extrair dados da URL"))
+                try:
+                    error_result = ScraperErrorResult(**data)
+                except Exception:
+                    # Fallback para respostas inesperadas do scraper
+                    error_result = ScraperErrorResult(
+                        error_code="PRICE_NOT_FOUND",
+                        marketplace="unknown",
+                        url=url,
+                        retryable=True,
+                        message=data.get("detail", "Não foi possível extrair dados da URL"),
+                    )
+                raise ScraperParseError(error_result)
 
             if response.status_code != 200:
                 raise ScraperUnavailableError(f"Scraper retornou HTTP {response.status_code}")

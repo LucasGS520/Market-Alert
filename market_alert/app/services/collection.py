@@ -31,6 +31,7 @@ from redis import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.clients.scraper import ScraperClient, ScraperParseError, ScraperUnavailableError
+from app.core.config import settings
 from app.models.competitor import Competitor
 from app.models.monitored_product import MonitoredProduct
 from app.models.price_history import PriceHistory
@@ -40,8 +41,10 @@ logger = structlog.get_logger()
 
 # Tempo máximo que o lock fica ativo (evita deadlocks se o worker travar)
 _LOCK_TTL_SEGUNDOS = 60
-# Intervalo mínimo entre requisições ao mesmo domínio (rate limit)
+# Intervalo mínimo entre requisições ao mesmo domínio (rate limit normal)
 _RATE_LIMIT_TTL_SEGUNDOS = 5
+# Erros que indicam bloqueio ativo e exigem cooldown longo no domínio
+_ERROS_BLOQUEIO = {"CAPTCHA_DETECTED", "BLOCKED"}
 
 
 def _dominio_da_url(url: str) -> str:
@@ -76,6 +79,20 @@ def _verificar_rate_limit(redis: Redis, dominio: str) -> bool:
         return False  # Ainda em cooldown
     redis.set(chave, "1", ex=_RATE_LIMIT_TTL_SEGUNDOS)
     return True
+
+
+def _aplicar_cooldown_bloqueio(redis: Redis, dominio: str) -> None:
+    """
+    Aplica cooldown longo ao domínio após CAPTCHA ou bloqueio detectado.
+
+    Sobrescreve qualquer cooldown menor existente para garantir que nenhuma
+    outra coleta pressione o mesmo site enquanto o bloqueio está ativo.
+    O TTL é configurável via DOMAIN_CAPTCHA_COOLDOWN_SECONDS (padrão: 300s).
+    """
+    chave = f"ratelimit:domain:{dominio}"
+    ttl = settings.domain_captcha_cooldown_seconds
+    redis.set(chave, "1", ex=ttl)
+    logger.warning("dominio_cooldown_bloqueio", dominio=dominio, cooldown_segundos=ttl)
 
 
 async def collect_product(
@@ -116,9 +133,37 @@ async def collect_product(
 
         try:
             resultado = await scraper.parse(product.url)
-        except (ScraperUnavailableError, ScraperParseError) as exc:
-            # Marca o produto como erro e propaga para retry no Celery
-            logger.warning("scraper_falhou", produto_id=str(product.id), erro=str(exc))
+        except ScraperUnavailableError as exc:
+            logger.warning("scraper_indisponivel", produto_id=str(product.id), erro=str(exc))
+            product.status = "error"
+            await session.commit()
+            raise
+        except ScraperParseError as exc:
+            error_code = exc.error_result.error_code
+            logger.warning(
+                "scraper_erro_semantico",
+                produto_id=str(product.id),
+                error_code=error_code,
+                retryable=exc.error_result.retryable,
+                marketplace=exc.error_result.marketplace,
+            )
+            if error_code == "UNAVAILABLE":
+                # Produto sem estoque: registra indisponibilidade e mantém monitoramento ativo
+                product.is_available = False
+                product.last_checked_at = datetime.now(timezone.utc)
+                proximo_intervalo = compute_next_interval(
+                    current_interval=product.check_interval_minutes,
+                    price_changed=False,
+                    consecutive_unchanged=(product.consecutive_unchanged or 0) + 1,
+                )
+                product.check_interval_minutes = proximo_intervalo
+                product.next_check_at = datetime.now(timezone.utc) + timedelta(minutes=proximo_intervalo)
+                await session.commit()
+                return None
+            if error_code in _ERROS_BLOQUEIO:
+                # CAPTCHA ou bloqueio: aplica cooldown longo no domínio para reduzir pressão
+                _aplicar_cooldown_bloqueio(redis, dominio)
+            # Demais erros semânticos: marca como erro e propaga para decisão de retry na task
             product.status = "error"
             await session.commit()
             raise
@@ -127,11 +172,16 @@ async def collect_product(
         preco_anterior = Decimal(str(product.current_price)) if product.current_price is not None else None
         preco_mudou = preco_anterior is None or novo_preco != preco_anterior
 
-        # Registra o preço coletado no histórico
+        # Registra o preço coletado no histórico (com metadados de auditoria)
         historico = PriceHistory(
             monitored_id=product.id,
             price=novo_preco,
             is_available=resultado.available,
+            title=resultado.title,
+            seller=resultado.seller,
+            currency=resultado.currency,
+            extraction_method=resultado.extraction_method,
+            confidence=resultado.confidence,
         )
         session.add(historico)
 
@@ -169,6 +219,8 @@ async def collect_product(
             preco=str(novo_preco),
             preco_mudou=preco_mudou,
             proximo_intervalo_min=proximo_intervalo,
+            extraction_method=resultado.extraction_method,
+            confidence=resultado.confidence,
         )
         return historico
 
@@ -211,14 +263,35 @@ async def collect_competitor(
 
         try:
             resultado = await scraper.parse(competitor.url)
-        except (ScraperUnavailableError, ScraperParseError) as exc:
-            logger.warning("scraper_falhou_concorrente", concorrente_id=str(competitor.id), erro=str(exc))
+        except ScraperUnavailableError as exc:
+            logger.warning("scraper_indisponivel_concorrente", concorrente_id=str(competitor.id), erro=str(exc))
+            raise
+        except ScraperParseError as exc:
+            error_code = exc.error_result.error_code
+            logger.warning(
+                "scraper_erro_semantico_concorrente",
+                concorrente_id=str(competitor.id),
+                error_code=error_code,
+                retryable=exc.error_result.retryable,
+            )
+            if error_code == "UNAVAILABLE":
+                competitor.is_available = False
+                competitor.last_checked_at = datetime.now(timezone.utc)
+                await session.commit()
+                return None
+            if error_code in _ERROS_BLOQUEIO:
+                _aplicar_cooldown_bloqueio(redis, dominio)
             raise
 
         historico = PriceHistory(
             competitor_id=competitor.id,
             price=resultado.price,
             is_available=resultado.available,
+            title=resultado.title,
+            seller=resultado.seller,
+            currency=resultado.currency,
+            extraction_method=resultado.extraction_method,
+            confidence=resultado.confidence,
         )
         session.add(historico)
 
@@ -232,7 +305,13 @@ async def collect_competitor(
         await session.commit()
         await session.refresh(historico)
 
-        logger.info("concorrente_coletado", concorrente_id=str(competitor.id), preco=str(resultado.price))
+        logger.info(
+            "concorrente_coletado",
+            concorrente_id=str(competitor.id),
+            preco=str(resultado.price),
+            extraction_method=resultado.extraction_method,
+            confidence=resultado.confidence,
+        )
         return historico
 
     finally:

@@ -1,11 +1,7 @@
 """
-Pacote scraping — coleta e extração de dados de páginas web.
+Pacote scraping — utilitários de coleta e parsing de páginas web.
 
-    collector  → requisição HTTP/Playwright, retorna HTML bruto
-    extractor  → pipeline de parsing (JSON-LD → CSS → regex → OG)
+    browser    → BrowserSession: contexto Playwright persistente por marketplace
+    collector  → fetch_with_http: coleta raw de HTML via curl_cffi (fingerprint Chrome)
+    extractor  → parse_price_string / extract_jsonld / detect_captcha: parsing compartilhado
 """
-
-from app.scraping.collector import fetch_html
-from app.scraping.extractor import extract_product
-
-__all__ = ["fetch_html", "extract_product"]

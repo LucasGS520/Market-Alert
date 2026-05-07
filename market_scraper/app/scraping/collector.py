@@ -1,27 +1,5 @@
-"""
-Coletor de HTML — responsável por baixar o conteúdo de páginas web.
-
-Estratégia em duas camadas:
-
-    1ª tentativa — HTTP com curl_cffi:
-        Rápido (~1-3s). Imita o fingerprint TLS do Chrome real, o que
-        passa pela maioria das proteções anti-bot básicas.
-        Biblioteca: curl_cffi (wrapper Python do libcurl com fingerprinting)
-
-    2ª tentativa — Playwright (fallback):
-        Lança um navegador Chromium headless real. Renderiza JavaScript,
-        executa cookies de sessão, espera o carregamento da página.
-        Mais lento (~5-15s) e consome ~200MB de RAM por instância.
-        Ativado apenas se settings.playwright_enabled = True.
-
-Quando usar qual:
-    curl_cffi: ~80% dos e-commerces brasileiros (Mercado Livre, Shopee, etc.)
-    Playwright: sites com Cloudflare Bot Management, CAPTCHA ou carregamento via JS
-"""
-
 import asyncio
-from typing import Literal
-from urllib.parse import urldefrag
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 import structlog
 
@@ -31,6 +9,40 @@ _HTTP_MAX_RETRIES = 2
 _HTTP_RETRY_BACKOFF_S = 2.0
 
 logger = structlog.get_logger()
+
+# Parâmetros de rastreamento/publicidade que não afetam o conteúdo do produto.
+# Removidos antes de qualquer fetch (HTTP ou browser) para reduzir sinais de bot.
+_STRIP_PARAMS = frozenset({
+    # Mercado Livre — recomendações internas
+    "reco_backend", "reco_client", "reco_item_pos", "reco_backend_type",
+    "reco_id", "reco_model",
+    # Mercado Livre — analytics interno
+    "wid", "sid", "c_id", "c_uid",
+    "da_id", "da_position", "da_sort_algorithm", "id_origin",
+    # Mercado Livre — publicidade
+    "is_advertising", "ad_domain", "ad_position", "ad_click_id",
+    "polycard_client",
+    # Magalu
+    "ads",
+    # Universal
+    "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term",
+    "fbclid", "gclid", "msclkid",
+})
+
+
+def clean_url(url: str) -> str:
+    """
+    Remove o fragment (#...) e parâmetros de rastreamento da URL,
+    preservando apenas o que é relevante para identificar o produto.
+    """
+    parsed = urlparse(url)
+    if parsed.query:
+        qs = parse_qs(parsed.query, keep_blank_values=True)
+        clean_qs = {k: v for k, v in qs.items() if k not in _STRIP_PARAMS}
+        clean_query = urlencode(clean_qs, doseq=True)
+    else:
+        clean_query = ""
+    return urlunparse(parsed._replace(query=clean_query, fragment=""))
 
 
 class CollectionError(Exception):
@@ -42,19 +54,13 @@ async def fetch_with_http(url: str) -> str:
     """
     Baixa o HTML de uma URL usando curl_cffi com fingerprint do Chrome.
 
-    Args:
-        url: URL da página a ser baixada.
-
-    Returns:
-        Conteúdo HTML da página como string.
-
     Raises:
-        CollectionError: Se o servidor retornar erro (4xx/5xx) ou houver falha de rede.
+        CollectionError: em caso de erro HTTP 4xx/5xx ou falha de rede.
     """
     from curl_cffi.requests import AsyncSession
 
-    url_clean, _ = urldefrag(url)
-    async with AsyncSession(impersonate="chrome120") as session:
+    url_clean = clean_url(url)
+    async with AsyncSession(impersonate="chrome124") as session:
         for attempt in range(_HTTP_MAX_RETRIES + 1):
             response = await session.get(
                 url_clean,
@@ -68,80 +74,8 @@ async def fetch_with_http(url: str) -> str:
                 await asyncio.sleep(wait)
                 continue
             if response.status_code == 403:
-                logger.warning("coleta_bloqueada_403", url=url_clean, motivo="anti-bot ou IP bloqueado pelo servidor")
                 raise CollectionError(f"HTTP 403 ao acessar {url_clean} — acesso bloqueado")
             if response.status_code >= 400:
                 raise CollectionError(f"HTTP {response.status_code} ao acessar {url_clean}")
             return response.text
         raise CollectionError(f"HTTP 429 persistente após {_HTTP_MAX_RETRIES} tentativas: {url_clean}")
-
-
-async def fetch_with_playwright(url: str) -> str:
-    """
-    Baixa o HTML usando um navegador Chromium headless real.
-
-    Útil para páginas que exigem JavaScript ou têm proteção anti-bot avançada.
-
-    Args:
-        url: URL da página a ser carregada.
-
-    Returns:
-        HTML completo da página após carregamento (incluindo conteúdo dinâmico).
-
-    Raises:
-        CollectionError: Se o Playwright não conseguir carregar a página.
-    """
-    from playwright.async_api import async_playwright
-
-    async with async_playwright() as pw:
-        try:
-            browser = await pw.chromium.launch(headless=True)
-        except Exception as exc:
-            raise CollectionError(f"Playwright não conseguiu iniciar o browser: {exc}") from exc
-        context = await browser.new_context(
-            viewport={"width": 1280, "height": 800},
-            locale="pt-BR",
-        )
-        page = await context.new_page()
-        try:
-            await page.goto(url, timeout=settings.playwright_timeout_ms, wait_until="domcontentloaded")
-            await page.wait_for_load_state("networkidle", timeout=settings.playwright_timeout_ms)
-            return await page.content()
-        except Exception as exc:
-            raise CollectionError(f"Playwright falhou para {url}: {exc}") from exc
-        finally:
-            await browser.close()
-
-
-async def fetch_html(url: str) -> tuple[str, Literal["http", "playwright"]]:
-    """
-    Busca o HTML de uma URL tentando HTTP primeiro e Playwright como fallback.
-
-    Args:
-        url: URL da página a ser coletada.
-
-    Returns:
-        Tupla (html, método_usado) onde método é "http" ou "playwright".
-
-    Raises:
-        CollectionError: Se ambas as estratégias falharem.
-    """
-    try:
-        html = await fetch_with_http(url)
-        logger.debug("coleta_http_sucesso", url=url)
-        return html, "http"
-    except CollectionError as exc:
-        if not settings.playwright_enabled:
-            logger.info("playwright_desabilitado_sem_fallback", url=url, motivo=str(exc))
-            raise
-        logger.info("http_falhou_tentando_playwright", url=url, motivo=str(exc))
-
-    # Tenta Playwright como fallback
-    try:
-        html = await fetch_with_playwright(url)
-    except CollectionError:
-        raise
-    except Exception as exc:
-        raise CollectionError(f"Playwright erro inesperado para {url}: {exc}") from exc
-    logger.debug("coleta_playwright_sucesso", url=url)
-    return html, "playwright"

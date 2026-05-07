@@ -13,13 +13,6 @@
 - **Cache / locks / broker**: Redis para locks, rate limits, cooldowns e broker/result backend.  
 - **Orquestração local**: docker-compose.yml define serviços e dependências (postgres, redis, market_scraper, api, worker, beat).
 
-### Modelos de dados principais
-- **MonitoredProduct**: representa um produto a ser monitorado.  
-- **Competitor**: URLs concorrentes vinculadas a um `MonitoredProduct`.  
-- **PriceHistory**: histórico de coletas (um registro por coleta).  
-- **Comparison**: snapshot do posicionamento competitivo (ranking, min/max/avg, status).  
-- **NotificationLog**: auditoria de notificações (gravado ao enviar alerts).
-
 ---
 
 ## Regras e Instruções de Execução
@@ -34,10 +27,3 @@
 6) Execute somente UMA FASE por vez. Ao terminar a FASE:
    - pare e peça autorização para a próxima FASE
 7) Se detectar duplicação/overreach fora do escopo, interrompa e reporte.
-
-### Regras para market_scraper (NÃO IGNORAR)
-- **NUNCA** reintroduza adapters por marketplace nem chamadas a APIs de marketplace (ex.: `api.mercadolibre.com`, `shopee.com.br/api/v4`, qualquer endpoint `/api/`).
-- O pipeline é genérico: toda URL passa pelas mesmas 4 estratégias em cascata (JSON-LD → CSS → regex → OG). Marketplace é apenas metadado detectado pela URL, não determina estratégia.
-- Chame sempre `fetch_html()` (não `fetch_with_http()` diretamente) para que o fallback Playwright seja automático.
-- Ao adicionar seletores ou estratégias de parsing, faça-o em `scraping/extractor.py` de forma genérica.
-- URLs de regressão validadas ficam em `market_scraper/tests/regression_urls.py`.

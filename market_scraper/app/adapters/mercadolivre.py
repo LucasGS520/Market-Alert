@@ -1,0 +1,281 @@
+import re
+from decimal import Decimal, InvalidOperation
+
+import structlog
+from parsel import Selector
+from playwright.async_api import Page
+
+from app.adapters.base import MarketplaceAdapter
+from app.core.config import settings
+from app.schemas import (
+    CollectedPage,
+    ErrorCode,
+    ExtractionMethod,
+    ScrapeError,
+    ScrapeResult,
+)
+
+logger = structlog.get_logger()
+
+_PRODUCT_ID_RE = re.compile(r"MLB-?\d+", re.IGNORECASE)
+
+# Chaves de preço a buscar no JSON de hidratação
+_PRICE_KEYS = frozenset({"price", "sale_price", "amount", "value", "currentprice"})
+# Contextos de parcela — descartados na busca recursiva
+_INSTALLMENT_KEYS = frozenset({"installment", "installments", "parcela", "parcelas", "monthly"})
+
+
+class MercadoLivreAdapter(MarketplaceAdapter):
+    marketplace = "mercadolivre"
+
+    async def collect(self, url: str) -> CollectedPage:
+        async def _wait(page: Page) -> None:
+            try:
+                # Cobre layout normal (/MLB-, /p/) e produto universal (/up/ com .poly-*)
+                await page.wait_for_selector(
+                    (
+                        ".ui-pdp-title, .andes-money-amount__fraction, .ui-pdp-container,"
+                        " .poly-component__price, .poly-price__current,"
+                        " .ui-pdp-buybox__offers-item"
+                    ),
+                    state="visible",
+                    timeout=min(settings.playwright_timeout_ms, 15000),
+                )
+            except Exception:
+                # Prossegue mesmo sem confirmar carregamento; extract() classifica a falha
+                pass
+
+        return await self._browser.navigate_and_collect(
+            url=url,
+            marketplace=self.marketplace,
+            wait_condition=_wait,
+        )
+
+    async def extract(self, page: CollectedPage) -> ScrapeResult | ScrapeError:
+        if page.captcha_detected:
+            return ScrapeError(
+                error_code=ErrorCode.CAPTCHA_DETECTED,
+                marketplace=self.marketplace,
+                url=page.url,
+                retryable=True,
+                message="CAPTCHA detectado na página do Mercado Livre",
+            )
+
+        if page.blocked:
+            return ScrapeError(
+                error_code=ErrorCode.BLOCKED,
+                marketplace=self.marketplace,
+                url=page.url,
+                retryable=True,
+                message="Acesso bloqueado (HTTP 403)",
+            )
+
+        if page.html is None:
+            return ScrapeError(
+                error_code=ErrorCode.PRICE_NOT_FOUND,
+                marketplace=self.marketplace,
+                url=page.url,
+                retryable=True,
+                message=f"Falha na coleta da página: {page.error}",
+            )
+
+        sel = Selector(page.html)
+
+        if _is_search_page(sel):
+            return ScrapeError(
+                error_code=ErrorCode.REDIRECT,
+                marketplace=self.marketplace,
+                url=page.url,
+                retryable=False,
+                message="URL redirecionou para página de busca ou categoria",
+            )
+
+        if _is_unavailable(sel):
+            return ScrapeError(
+                error_code=ErrorCode.UNAVAILABLE,
+                marketplace=self.marketplace,
+                url=page.url,
+                retryable=False,
+                message="Produto indisponível no Mercado Livre",
+            )
+
+        title = _extract_title(sel)
+
+        # Estratégia 1: payload de rede (maior confiança)
+        price, method, confidence = _extract_price_from_payloads(page.network_payloads)
+
+        # Estratégia 2: DOM renderizado
+        if price is None:
+            price, method, confidence = _extract_price_from_dom(sel)
+
+        if price is None or price <= 0:
+            return ScrapeError(
+                error_code=ErrorCode.PRICE_NOT_FOUND,
+                marketplace=self.marketplace,
+                url=page.url,
+                retryable=True,
+                message="Preço não encontrado na página",
+            )
+
+        logger.info(
+            "ml_extracao_sucesso",
+            url=page.url,
+            price=str(price),
+            method=method.value,
+            confidence=confidence,
+        )
+
+        return ScrapeResult(
+            marketplace=self.marketplace,
+            url=page.url,
+            canonical_url=_extract_canonical(sel),
+            title=title,
+            price=price,
+            currency="BRL",
+            available=True,
+            seller=_extract_seller(sel),
+            product_id=_extract_product_id(page.url),
+            extraction_method=method,
+            confidence=confidence,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Funções auxiliares de detecção
+# ---------------------------------------------------------------------------
+
+def _is_search_page(sel: Selector) -> bool:
+    return bool(
+        sel.css(".ui-search-results, .ui-search-layout, #search-results").get()
+    )
+
+
+def _is_unavailable(sel: Selector) -> bool:
+    buybox_html = sel.css(".ui-pdp-buybox").get() or ""
+    unavail_keywords = ("indisponível", "indisponivel", "esgotado", "sem estoque")
+    if any(kw in buybox_html.lower() for kw in unavail_keywords):
+        return True
+    return bool(sel.css(".ui-pdp-unavailable, .ui-pdp-buybox--unavailable").get())
+
+
+# ---------------------------------------------------------------------------
+# Extração de campos
+# ---------------------------------------------------------------------------
+
+def _extract_title(sel: Selector) -> str | None:
+    return (
+        sel.css(".ui-pdp-title::text").get()
+        or sel.css("h1.ui-pdp-title::text").get()
+        or sel.css("h1::text").get()
+    )
+
+
+def _extract_canonical(sel: Selector) -> str | None:
+    return sel.css("link[rel='canonical']::attr(href)").get()
+
+
+def _extract_seller(sel: Selector) -> str | None:
+    return (
+        sel.css(".ui-pdp-seller__header-title::text").get()
+        or sel.css("[class*='seller'] [class*='title']::text").get()
+    )
+
+
+def _extract_product_id(url: str) -> str | None:
+    match = _PRODUCT_ID_RE.search(url)
+    return match.group(0).upper().replace("-", "") if match else None
+
+
+# ---------------------------------------------------------------------------
+# Extração de preço — payload de rede
+# ---------------------------------------------------------------------------
+
+def _extract_price_from_payloads(
+    payloads: list[dict],
+) -> tuple[Decimal | None, ExtractionMethod, float]:
+    for entry in payloads:
+        val = _deep_find_price(entry.get("body", {}), depth=8)
+        if val and val > 0:
+            logger.debug("ml_preco_via_payload", price=val)
+            return Decimal(str(round(val, 2))), ExtractionMethod.NETWORK_PAYLOAD, 1.0
+    return None, ExtractionMethod.NETWORK_PAYLOAD, 0.0
+
+
+def _deep_find_price(obj: object, depth: int) -> float | None:
+    """Busca recursiva por valor de preço em JSON de hidratação do ML."""
+    if depth <= 0:
+        return None
+
+    if isinstance(obj, dict):
+        for key, val in obj.items():
+            key_lower = key.lower()
+            if any(exc in key_lower for exc in _INSTALLMENT_KEYS):
+                continue
+            if key_lower in _PRICE_KEYS:
+                if isinstance(val, (int, float)) and val > 0:
+                    return float(val)
+                if isinstance(val, str):
+                    try:
+                        parsed = float(val.replace(",", "."))
+                        if parsed > 0:
+                            return parsed
+                    except ValueError:
+                        pass
+        for key, val in obj.items():
+            if any(exc in key.lower() for exc in _INSTALLMENT_KEYS):
+                continue
+            result = _deep_find_price(val, depth - 1)
+            if result:
+                return result
+
+    elif isinstance(obj, list):
+        for item in obj:
+            result = _deep_find_price(item, depth - 1)
+            if result:
+                return result
+
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Extração de preço — DOM renderizado
+# ---------------------------------------------------------------------------
+
+def _extract_price_from_dom(
+    sel: Selector,
+) -> tuple[Decimal | None, ExtractionMethod, float]:
+    # Layout padrão (/MLB-, /p/): usa .andes-money-amount dentro do container de preço
+    price_zone = sel.css(".ui-pdp-price__second-line, .ui-pdp-price__main-container")
+    target = price_zone if price_zone else sel
+
+    fraction = target.css(".andes-money-amount__fraction::text").get()
+    if fraction is not None:
+        cents_text = target.css(".andes-money-amount__cents::text").get()
+        try:
+            # ML usa ponto como separador de milhar: "1.234" → 1234
+            integer_part = int(fraction.replace(".", "").replace(",", ""))
+            cents_part = int(cents_text) if cents_text and cents_text.isdigit() else 0
+            price = Decimal(f"{integer_part}.{cents_part:02d}")
+            return price, ExtractionMethod.CSS_SELECTOR, 0.85
+        except (ValueError, InvalidOperation):
+            pass
+
+    # Layout produto universal (/up/MLBU): componentes poly-* com preço em texto corrido
+    poly_text = (
+        sel.css(".poly-price__current .andes-money-amount__fraction::text").get()
+        or sel.css(".poly-component__price .andes-money-amount__fraction::text").get()
+    )
+    if poly_text is not None:
+        poly_cents = (
+            sel.css(".poly-price__current .andes-money-amount__cents::text").get()
+            or sel.css(".poly-component__price .andes-money-amount__cents::text").get()
+        )
+        try:
+            integer_part = int(poly_text.replace(".", "").replace(",", ""))
+            cents_part = int(poly_cents) if poly_cents and poly_cents.isdigit() else 0
+            price = Decimal(f"{integer_part}.{cents_part:02d}")
+            return price, ExtractionMethod.CSS_SELECTOR, 0.80
+        except (ValueError, InvalidOperation):
+            pass
+
+    return None, ExtractionMethod.CSS_SELECTOR, 0.0

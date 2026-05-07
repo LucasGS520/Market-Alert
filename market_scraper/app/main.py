@@ -1,69 +1,44 @@
-"""
-Ponto de entrada do microserviço market_scraper.
-
-Serviço stateless que extrai preço/disponibilidade/título de qualquer URL de e-commerce.
-Fluxo: coletar HTML (HTTP → Playwright fallback) → pipeline de parsing em cascata.
-
-Endpoints:
-    POST /scraper/parse → extrai dados de produto de uma URL
-    GET  /health        → verifica se o serviço está rodando
-"""
-
 import logging
-from datetime import datetime, timezone
-from decimal import Decimal
+from contextlib import asynccontextmanager
 
 import structlog
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import AnyHttpUrl, BaseModel
 
-from app.scraping.collector import CollectionError, fetch_html
-from app.scraping.extractor import extract_product
+from app.router import MarketplaceRouter
+from app.schemas import ErrorCode, ScrapeError, ScrapeResult
+from app.scraping.browser import BrowserSession
 
-# Desabilita access logs do Uvicorn (--health checks são muito verbosos)
+# Suprime access logs do Uvicorn (health checks são muito frequentes)
 logging.getLogger("uvicorn.access").disabled = True
 
 logger = structlog.get_logger()
 
-app = FastAPI(
-    title="market_scraper",
-    version="0.3.0",
-    description="Microserviço stateless de extração de preços via pipeline genérico.",
-    docs_url="/docs",
-)
-
-_MARKETPLACE_PATTERNS: dict[str, str] = {
-    "mercadolivre": "mercadolivre",
-    "mercadolibre": "mercadolivre",
-    "shopee": "shopee",
-    "magazineluiza": "magalu",
-    "magalu": "magalu",
-    "americanas": "americanas",
-    "amazon": "amazon",
-    "casasbahia": "casasbahia",
-}
+_router = MarketplaceRouter()
 
 
 class ParseRequest(BaseModel):
     url: AnyHttpUrl
 
 
-class ParseResponse(BaseModel):
-    marketplace: str
-    price: Decimal
-    available: bool
-    title: str | None = None
-    seller: str | None = None
-    currency: str | None = None
-    collected_at: datetime
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    browser = BrowserSession()
+    await browser.start()
+    app.state.browser = browser
+    logger.info("market_scraper_iniciado")
+    yield
+    await browser.close_all()
+    logger.info("market_scraper_encerrado")
 
 
-def _detect_marketplace(url: str) -> str:
-    url_lower = url.lower()
-    for pattern, name in _MARKETPLACE_PATTERNS.items():
-        if pattern in url_lower:
-            return name
-    return "generic"
+app = FastAPI(
+    title="market_scraper",
+    version="1.0.0",
+    description="Microserviço de extração de preços por adapters de marketplace.",
+    docs_url="/docs",
+    lifespan=lifespan,
+)
 
 
 @app.get("/health", tags=["infraestrutura"])
@@ -71,44 +46,54 @@ async def health() -> dict:
     return {"status": "ok"}
 
 
-@app.post("/scraper/parse", response_model=ParseResponse, tags=["scraping"])
-async def parse_url(body: ParseRequest) -> ParseResponse:
+@app.post("/scraper/parse", response_model=ScrapeResult, tags=["scraping"])
+async def parse_url(body: ParseRequest, request: Request) -> ScrapeResult:
     """
-    Extrai preço e dados de produto de uma URL.
+    Extrai preço e dados de produto de uma URL de marketplace suportado.
 
-    Coleta o HTML (HTTP com curl_cffi, Playwright como fallback) e aplica
-    4 estratégias de extração em cascata: JSON-LD → CSS → regex → OG.
+    Marketplaces suportados: mercadolivre, shopee, magalu.
+    URLs fora desses domínios retornam 422 com MARKETPLACE_NOT_SUPPORTED.
     """
     url = str(body.url)
-    marketplace = _detect_marketplace(url)
+    marketplace = _router.detect(url)
+
+    if marketplace is None:
+        logger.warning("marketplace_nao_suportado", url=url)
+        raise HTTPException(
+            status_code=422,
+            detail=ScrapeError(
+                error_code=ErrorCode.MARKETPLACE_NOT_SUPPORTED,
+                marketplace="unknown",
+                url=url,
+                retryable=False,
+                message="Marketplace não suportado. Suportados: mercadolivre, shopee, magalu",
+            ).model_dump(),
+        )
+
     logger.info("requisicao_parse", url=url, marketplace=marketplace)
 
     try:
-        html, metodo = await fetch_html(url)
-        dados = extract_product(html, url)
-    except CollectionError as exc:
-        logger.warning("coleta_falhou", url=url, motivo=str(exc))
-        raise HTTPException(status_code=422, detail=str(exc))
-    except ValueError as exc:
-        logger.warning("extracao_falhou", url=url, motivo=str(exc))
-        raise HTTPException(status_code=422, detail=str(exc))
+        adapter = _router.get_adapter(marketplace, request.app.state.browser)
+        result = await adapter.scrape(url)
     except Exception as exc:
-        logger.error("erro_inesperado_parse", url=url, erro=str(exc))
+        logger.error("erro_inesperado_parse", url=url, marketplace=marketplace, erro=str(exc))
         raise HTTPException(status_code=500, detail="Erro interno no scraper")
+
+    if isinstance(result, ScrapeError):
+        logger.warning(
+            "parse_com_erro",
+            url=url,
+            marketplace=marketplace,
+            error_code=result.error_code.value,
+        )
+        raise HTTPException(status_code=422, detail=result.model_dump())
 
     logger.info(
         "parse_sucesso",
         url=url,
         marketplace=marketplace,
-        preco=str(dados["price"]),
-        metodo_coleta=metodo,
+        price=str(result.price),
+        method=result.extraction_method.value,
+        confidence=result.confidence,
     )
-    return ParseResponse(
-        marketplace=marketplace,
-        price=Decimal(str(dados["price"])),
-        available=bool(dados.get("is_available", True)),
-        title=dados.get("name"),
-        seller=None,
-        currency=dados.get("currency"),
-        collected_at=datetime.now(timezone.utc),
-    )
+    return result

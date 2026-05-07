@@ -56,13 +56,13 @@ O módulo é organizado em seis camadas com responsabilidades bem definidas. Nen
 │     Orquestra collect() + extract() por marketplace      │
 ├──────────────────────────────────────────────────────────┤
 │  4. Coleta (scraping/browser.py + collector.py)          │
-│     Busca o HTML e payloads de rede sem interpretar       │
+│     Busca o HTML e payloads de rede sem interpretar      │
 ├──────────────────────────────────────────────────────────┤
 │  5. Extração (adapters/*.py + scraping/extractor.py)     │
-│     Interpreta os dados coletados, retorna resultado      │
+│     Interpreta os dados coletados, retorna resultado     │
 ├──────────────────────────────────────────────────────────┤
 │  6. Contratos (schemas.py + core/config.py)              │
-│     Tipos, validações e configuração de ambiente          │
+│     Tipos, validações e configuração de ambiente         │
 └──────────────────────────────────────────────────────────┘
 ```
 

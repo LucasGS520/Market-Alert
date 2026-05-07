@@ -1,12 +1,11 @@
 """
 Pacote scraping — coleta e extração de dados de páginas web.
 
-Módulos:
-    collector → faz a requisição HTTP e retorna o HTML bruto
-    parser    → extrai preço, disponibilidade e nome do HTML
-
-Separação de responsabilidades:
-    O collector não sabe nada sobre o formato do HTML — apenas o busca.
-    O parser não faz requisições — apenas processa o HTML recebido.
-    O main.py orquestra os dois chamando collect_and_parse().
+    collector  → requisição HTTP/Playwright, retorna HTML bruto
+    extractor  → pipeline de parsing (JSON-LD → CSS → regex → OG)
 """
+
+from app.scraping.collector import fetch_html
+from app.scraping.extractor import extract_product
+
+__all__ = ["fetch_html", "extract_product"]

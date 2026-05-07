@@ -26,13 +26,6 @@ class Settings(BaseSettings):
     # Timeout para operações do Playwright (navegação + carregamento)
     playwright_timeout_ms: int = 30000
 
-    # User-agent que imita um navegador real (reduz bloqueios)
-    user_agent: str = (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/120.0.0.0 Safari/537.36"
-    )
-
     log_level: str = "INFO"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")

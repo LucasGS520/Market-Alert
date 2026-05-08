@@ -7,8 +7,6 @@ if TYPE_CHECKING:
 
 SUPPORTED_MARKETPLACES: dict[str, list[str]] = {
     "mercadolivre": [r"mercadolivre\.com\.br", r"mercadolibre\.com"],
-    "shopee": [r"shopee\.com\.br"],
-    "magalu": [r"magazineluiza\.com\.br", r"magalu\.com"],
 }
 
 
@@ -22,13 +20,9 @@ class MarketplaceRouter:
 
     def get_adapter(self, marketplace: str, browser: "BrowserSession") -> "MarketplaceAdapter":
         from app.adapters.mercadolivre import MercadoLivreAdapter
-        from app.adapters.shopee import ShopeeAdapter
-        from app.adapters.magalu import MagaluAdapter
 
         adapters = {
             "mercadolivre": MercadoLivreAdapter,
-            "shopee": ShopeeAdapter,
-            "magalu": MagaluAdapter,
         }
         cls = adapters.get(marketplace)
         if cls is None:

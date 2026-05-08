@@ -17,12 +17,34 @@ from price_parser import Price
 logger = structlog.get_logger()
 
 _CAPTCHA_INDICATORS = (
+    # CAPTCHA clássico
     "recaptcha",
     "hcaptcha",
-    "cf-challenge",
     "areyouhuman",
     "robot-detection",
+    # Cloudflare
+    "cf-challenge",
     "challenge-running",
+    "cf_chl_",
+    "cf-browser-verification",
+    "cloudflare ray id",
+    "__cf_bm",
+    # DataDome
+    "datadome",
+    # PerimeterX
+    "px_captcha",
+    "_pximg",
+    # Imperva / Incapsula
+    "incapsula",
+)
+
+_CAPTCHA_TITLES = (
+    "just a moment",
+    "acesso negado",
+    "access denied",
+    "security check",
+    "verificação de segurança",
+    "verificacao de seguranca",
 )
 
 
@@ -82,8 +104,16 @@ def extract_script_json(html: str) -> list[dict]:
 
 
 def detect_captcha(html: str) -> bool:
-    """Retorna True se o HTML contém indicadores conhecidos de CAPTCHA."""
+    """Retorna True se o HTML contém indicadores conhecidos de CAPTCHA ou challenge."""
     if not html:
         return False
     html_lower = html.lower()
-    return any(ind in html_lower for ind in _CAPTCHA_INDICATORS)
+    if any(ind in html_lower for ind in _CAPTCHA_INDICATORS):
+        return True
+    # Verifica <title> — sistemas como Cloudflare retornam 200 com título de challenge
+    title_match = re.search(r"<title[^>]*>([^<]{1,120})</title>", html, re.IGNORECASE)
+    if title_match:
+        title = title_match.group(1).lower()
+        if any(t in title for t in _CAPTCHA_TITLES):
+            return True
+    return False

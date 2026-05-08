@@ -51,8 +51,8 @@ async def parse_url(body: ParseRequest, request: Request) -> ScrapeResult:
     """
     Extrai preço e dados de produto de uma URL de marketplace suportado.
 
-    Marketplaces suportados: mercadolivre, shopee, magalu.
-    URLs fora desses domínios retornam 422 com MARKETPLACE_NOT_SUPPORTED.
+    Marketplace suportado: mercadolivre.
+    URLs fora desse domínio retornam 422 com MARKETPLACE_NOT_SUPPORTED.
     """
     url = str(body.url)
     marketplace = _router.detect(url)
@@ -66,7 +66,7 @@ async def parse_url(body: ParseRequest, request: Request) -> ScrapeResult:
                 marketplace="unknown",
                 url=url,
                 retryable=False,
-                message="Marketplace não suportado. Suportados: mercadolivre, shopee, magalu",
+                message="Marketplace não suportado. Suportado: mercadolivre",
             ).model_dump(),
         )
 

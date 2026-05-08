@@ -22,7 +22,6 @@ _STRIP_PARAMS = frozenset({
     # Mercado Livre — publicidade
     "is_advertising", "ad_domain", "ad_position", "ad_click_id",
     "polycard_client",
-    # Magalu
     "ads",
     # Universal
     "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term",

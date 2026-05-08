@@ -1,5 +1,6 @@
 import re
 from decimal import Decimal, InvalidOperation
+from urllib.parse import urlparse, urlunparse
 
 import structlog
 from parsel import Selector
@@ -19,6 +20,15 @@ logger = structlog.get_logger()
 
 _PRODUCT_ID_RE = re.compile(r"MLB-?\d+", re.IGNORECASE)
 
+
+def _normalize_ml_url(url: str) -> str:
+    """Redireciona produto.mercadolivre.com.br para www — o subdomínio de anúncios tem proteção mais agressiva."""
+    parsed = urlparse(url)
+    if parsed.netloc == "produto.mercadolivre.com.br":
+        parsed = parsed._replace(netloc="www.mercadolivre.com.br")
+        return urlunparse(parsed)
+    return url
+
 # Chaves de preço a buscar no JSON de hidratação
 _PRICE_KEYS = frozenset({"price", "sale_price", "amount", "value", "currentprice"})
 # Contextos de parcela — descartados na busca recursiva
@@ -29,6 +39,8 @@ class MercadoLivreAdapter(MarketplaceAdapter):
     marketplace = "mercadolivre"
 
     async def collect(self, url: str) -> CollectedPage:
+        url = _normalize_ml_url(url)
+
         async def _wait(page: Page) -> None:
             try:
                 # Cobre layout normal (/MLB-, /p/) e produto universal (/up/ com .poly-*)
@@ -109,6 +121,15 @@ class MercadoLivreAdapter(MarketplaceAdapter):
             price, method, confidence = _extract_price_from_dom(sel)
 
         if price is None or price <= 0:
+            if page.html and _is_challenge_page(sel):
+                await self._browser.reset_context(self.marketplace)
+                return ScrapeError(
+                    error_code=ErrorCode.CAPTCHA_DETECTED,
+                    marketplace=self.marketplace,
+                    url=page.url,
+                    retryable=True,
+                    message="Página sem estrutura de produto ML — possível soft-block",
+                )
             return ScrapeError(
                 error_code=ErrorCode.PRICE_NOT_FOUND,
                 marketplace=self.marketplace,
@@ -147,6 +168,13 @@ class MercadoLivreAdapter(MarketplaceAdapter):
 def _is_search_page(sel: Selector) -> bool:
     return bool(
         sel.css(".ui-search-results, .ui-search-layout, #search-results").get()
+    )
+
+
+def _is_challenge_page(sel: Selector) -> bool:
+    """Página sem nenhum marker de produto ML indica soft-block ou challenge."""
+    return not bool(
+        sel.css(".ui-pdp-container, .andes-money-amount, .poly-card__portals, .ui-pdp-title").get()
     )
 
 

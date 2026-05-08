@@ -28,6 +28,7 @@ class ExtractionMethod(str, Enum):
 class CollectedPage:
     url: str
     marketplace: str
+    final_url: str | None = None
     html: str | None = None
     network_payloads: list[dict] = field(default_factory=list)
     rendered: bool = False

@@ -40,16 +40,17 @@ class ScraperErrorResult(BaseModel):
 
 class ScraperResult(BaseModel):
     """
-    Resultado retornado pelo microserviço market_scraper.
+    Resultado de sucesso retornado pelo microserviço market_scraper (contrato v1).
 
-    Espelha o contrato ScrapeResult do scraper, preservando todos os campos
-    para auditoria e diagnóstico (extraction_method, confidence, canonical_url etc.).
+    Campos obrigatórios: marketplace, available, extraction_method, collected_at.
+    price: não-nulo e > 0 quando available=True; None quando available=False.
     """
     marketplace: str
-    price: Decimal
+    price: Decimal | None = None
     available: bool
     title: str | None = None
     seller: str | None = None
+    thumbnail_url: str | None = None
     currency: str | None = None
     collected_at: datetime
     url: str | None = None

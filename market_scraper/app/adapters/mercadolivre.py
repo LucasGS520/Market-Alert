@@ -8,7 +8,9 @@ from playwright.async_api import Page
 
 from app.adapters.base import MarketplaceAdapter
 from app.core.config import settings
+from app.scraping.extractor import extract_jsonld, extract_script_json
 from app.schemas import (
+    CONFIDENCE_MIN,
     CollectedPage,
     ErrorCode,
     ExtractionMethod,
@@ -18,7 +20,7 @@ from app.schemas import (
 
 logger = structlog.get_logger()
 
-_PRODUCT_ID_RE = re.compile(r"MLB-?\d+", re.IGNORECASE)
+_PRODUCT_ID_RE = re.compile(r"MLB[A-Z]?-?\d+", re.IGNORECASE)
 
 
 def _normalize_ml_url(url: str) -> str:
@@ -82,6 +84,15 @@ class MercadoLivreAdapter(MarketplaceAdapter):
                 message="Acesso bloqueado (HTTP 403)",
             )
 
+        if page.status_code == 404:
+            return ScrapeError(
+                error_code=ErrorCode.REDIRECT,
+                marketplace=self.marketplace,
+                url=page.url,
+                retryable=False,
+                message="Produto não encontrado (HTTP 404)",
+            )
+
         if page.html is None:
             return ScrapeError(
                 error_code=ErrorCode.PRICE_NOT_FOUND,
@@ -116,6 +127,14 @@ class MercadoLivreAdapter(MarketplaceAdapter):
         # Estratégia 1: payload de rede (maior confiança)
         price, method, confidence = _extract_price_from_payloads(page.network_payloads)
 
+        # Estratégia 1.5: JSON hidratação em <script type="application/json">
+        if price is None:
+            price, method, confidence = _extract_price_from_script_json(page.html)
+
+        # Estratégia 1.7: JSON-LD schema.org/Product
+        if price is None:
+            price, method, confidence = _extract_price_from_jsonld(page.html)
+
         # Estratégia 2: DOM renderizado
         if price is None:
             price, method, confidence = _extract_price_from_dom(sel)
@@ -138,12 +157,27 @@ class MercadoLivreAdapter(MarketplaceAdapter):
                 message="Preço não encontrado na página",
             )
 
+        seller = _extract_seller(sel, page.html)
+        thumbnail_url = _extract_thumbnail(sel, page.html)
+
+        conf_min = CONFIDENCE_MIN.get(method, 0.70)
+        if confidence < conf_min:
+            logger.warning(
+                "ml_confidence_abaixo_limiar",
+                url=page.url,
+                method=method.value,
+                confidence=confidence,
+                confidence_min=conf_min,
+            )
+
         logger.info(
             "ml_extracao_sucesso",
             url=page.url,
             price=str(price),
             method=method.value,
             confidence=confidence,
+            seller_missing=seller is None,
+            thumbnail_missing=thumbnail_url is None,
         )
 
         return ScrapeResult(
@@ -154,8 +188,9 @@ class MercadoLivreAdapter(MarketplaceAdapter):
             price=price,
             currency="BRL",
             available=True,
-            seller=_extract_seller(sel),
+            seller=seller,
             product_id=_extract_product_id(page.url),
+            thumbnail_url=thumbnail_url,
             extraction_method=method,
             confidence=confidence,
         )
@@ -202,16 +237,63 @@ def _extract_canonical(sel: Selector) -> str | None:
     return sel.css("link[rel='canonical']::attr(href)").get()
 
 
-def _extract_seller(sel: Selector) -> str | None:
-    return (
+def _extract_seller(sel: Selector, html: str | None = None) -> str | None:
+    candidate = (
         sel.css(".ui-pdp-seller__header-title::text").get()
+        or sel.css(".ui-pdp-seller__info-title::text").get()
         or sel.css("[class*='seller'] [class*='title']::text").get()
+        or sel.css(".ui-pdp-seller .ui-pdp-media__title::text").get()
+        or sel.css("[data-testid='seller-info'] strong::text").get()
     )
+    if candidate:
+        return candidate.strip() or None
+
+    if not html:
+        return None
+    for obj in extract_jsonld(html, url=""):
+        offers = obj.get("offers")
+        targets = [offers] if isinstance(offers, dict) else (offers if isinstance(offers, list) else [])
+        for offer in targets:
+            if not isinstance(offer, dict):
+                continue
+            seller = offer.get("seller")
+            if isinstance(seller, dict) and seller.get("name"):
+                return str(seller["name"])
+    return None
 
 
 def _extract_product_id(url: str) -> str | None:
     match = _PRODUCT_ID_RE.search(url)
     return match.group(0).upper().replace("-", "") if match else None
+
+
+def _extract_thumbnail(sel: Selector, html: str | None = None) -> str | None:
+    # Source 1: OG image — confiável e alta qualidade
+    og_image = sel.css("meta[property='og:image']::attr(content)").get()
+    if og_image and og_image.startswith("http"):
+        return og_image
+
+    # Source 2: JSON-LD image field
+    if html:
+        for obj in extract_jsonld(html, url=""):
+            image = obj.get("image")
+            if isinstance(image, str) and image.startswith("http"):
+                return image
+            if isinstance(image, list) and image:
+                first = image[0]
+                if isinstance(first, str) and first.startswith("http"):
+                    return first
+                if isinstance(first, dict) and str(first.get("url", "")).startswith("http"):
+                    return str(first["url"])
+
+    # Source 3: seletores CSS (layout padrão e universal)
+    css_img = (
+        sel.css(".ui-pdp-gallery__figure img::attr(src)").get()
+        or sel.css(".ui-pdp-image::attr(src)").get()
+        or sel.css(".poly-card__image img::attr(src)").get()
+        or sel.css(".poly-component__picture img::attr(src)").get()
+    )
+    return css_img if css_img and css_img.startswith("http") else None
 
 
 # ---------------------------------------------------------------------------
@@ -272,13 +354,16 @@ def _deep_find_price(obj: object, depth: int) -> float | None:
 def _extract_price_from_dom(
     sel: Selector,
 ) -> tuple[Decimal | None, ExtractionMethod, float]:
-    # Layout padrão (/MLB-, /p/): usa .andes-money-amount dentro do container de preço
-    price_zone = sel.css(".ui-pdp-price__second-line, .ui-pdp-price__main-container")
-    target = price_zone if price_zone else sel
-
-    fraction = target.css(".andes-money-amount__fraction::text").get()
-    if fraction is not None:
-        cents_text = target.css(".andes-money-amount__cents::text").get()
+    # Layout padrão (/MLB-, /p/): containers específicos sem fallback global
+    # — evita captura de valor de parcela fora do contexto de preço principal.
+    for zone_sel in (".ui-pdp-price__second-line", ".ui-pdp-price__main-container"):
+        zone = sel.css(zone_sel)
+        if not zone:
+            continue
+        fraction = zone.css(".andes-money-amount__fraction::text").get()
+        if fraction is None:
+            continue
+        cents_text = zone.css(".andes-money-amount__cents::text").get()
         try:
             # ML usa ponto como separador de milhar: "1.234" → 1234
             integer_part = int(fraction.replace(".", "").replace(",", ""))
@@ -307,3 +392,48 @@ def _extract_price_from_dom(
             pass
 
     return None, ExtractionMethod.CSS_SELECTOR, 0.0
+
+
+# ---------------------------------------------------------------------------
+# Extração de preço — JSON hidratação em script tags
+# ---------------------------------------------------------------------------
+
+def _extract_price_from_script_json(
+    html: str | None,
+) -> tuple[Decimal | None, ExtractionMethod, float]:
+    if not html:
+        return None, ExtractionMethod.HYDRATION_JSON, 0.0
+    for blob in extract_script_json(html):
+        val = _deep_find_price(blob, depth=10)
+        if val and val > 0:
+            logger.debug("ml_preco_via_script_json", price=val)
+            return Decimal(str(round(val, 2))), ExtractionMethod.HYDRATION_JSON, 0.95
+    return None, ExtractionMethod.HYDRATION_JSON, 0.0
+
+
+# ---------------------------------------------------------------------------
+# Extração de preço — JSON-LD schema.org/Product
+# ---------------------------------------------------------------------------
+
+def _extract_price_from_jsonld(
+    html: str | None,
+) -> tuple[Decimal | None, ExtractionMethod, float]:
+    if not html:
+        return None, ExtractionMethod.SSR_STATE, 0.0
+    for obj in extract_jsonld(html, url=""):
+        offers = obj.get("offers") or obj.get("Offers")
+        if isinstance(offers, dict):
+            price_raw = offers.get("price") or offers.get("lowPrice")
+        elif isinstance(offers, list) and offers:
+            price_raw = offers[0].get("price")
+        else:
+            price_raw = obj.get("price")
+        if price_raw is not None:
+            try:
+                val = float(str(price_raw).replace(",", "."))
+                if val > 0:
+                    logger.debug("ml_preco_via_jsonld", price=val)
+                    return Decimal(str(round(val, 2))), ExtractionMethod.SSR_STATE, 0.92
+            except (ValueError, TypeError):
+                continue
+    return None, ExtractionMethod.SSR_STATE, 0.0

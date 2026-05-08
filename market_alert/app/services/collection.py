@@ -182,6 +182,9 @@ async def collect_product(
             currency=resultado.currency,
             extraction_method=resultado.extraction_method,
             confidence=resultado.confidence,
+            thumbnail_url=resultado.thumbnail_url,
+            canonical_url=resultado.canonical_url,
+            product_id=resultado.product_id,
         )
         session.add(historico)
 
@@ -292,6 +295,9 @@ async def collect_competitor(
             currency=resultado.currency,
             extraction_method=resultado.extraction_method,
             confidence=resultado.confidence,
+            thumbnail_url=resultado.thumbnail_url,
+            canonical_url=resultado.canonical_url,
+            product_id=resultado.product_id,
         )
         session.add(historico)
 

@@ -1,12 +1,12 @@
 {
-  "timestamp": "2026-05-08T11:22:20.712431",
+  "timestamp": "2026-05-08T13:29:36.807368",
   "total_results": 13,
   "results": [
     {
       "url": "https://www.mercadolivre.com.br/celular-samsung-galaxy-a26-5g-256gb-8gb-ram-cmera-de-50mp-ip67-tela-super-amoled-67-nfc-branco/p/MLB47436035",
       "marketplace": "mercadolivre",
-      "timestamp": "2026-05-08T11:22:58.838191",
-      "elapsed_seconds": 38.1257107257843,
+      "timestamp": "2026-05-08T13:30:26.313219",
+      "elapsed_seconds": 49.505815744400024,
       "success": true,
       "error_code": null,
       "collection": {
@@ -14,7 +14,7 @@
         "status_code": 200,
         "blocked": false,
         "captcha_detected": false,
-        "html_length": 1479451,
+        "html_length": 1472401,
         "payload_count": 0,
         "error": null
       },
@@ -23,14 +23,15 @@
         "url": "https://www.mercadolivre.com.br/celular-samsung-galaxy-a26-5g-256gb-8gb-ram-cmera-de-50mp-ip67-tela-super-amoled-67-nfc-branco/p/MLB47436035",
         "canonical_url": "https://www.mercadolivre.com.br/celular-samsung-galaxy-a26-5g-256gb-8gb-ram-cmera-de-50mp-ip67-tela-super-amoled-67-nfc-branco/p/MLB47436035",
         "title": "Celular Samsung Galaxy A26 5g 256gb, 8gb Ram, Câmera De 50mp, Ip67, Tela Super Amoled 6.7 , Nfc - Branco",
-        "price": "2799.10",
+        "price": "1529.1",
         "currency": "BRL",
         "available": true,
         "seller": "Produtos do Vikings",
         "product_id": "MLB47436035",
-        "extraction_method": "css_selector",
-        "confidence": 0.85,
-        "collected_at": "2026-05-08T14:22:58.833986Z"
+        "thumbnail_url": "https://http2.mlstatic.com/D_NQ_NP_657456-MLA100074445249_122025-O.webp",
+        "extraction_method": "ssr_state",
+        "confidence": 0.92,
+        "collected_at": "2026-05-08T16:30:26.308300Z"
       },
       "diagnosis": {
         "status": "success",
@@ -41,8 +42,8 @@
     {
       "url": "https://www.mercadolivre.com.br/fone-ouvido-bluetooth-54-sem-fio-estojo-de-carregamento-anti-ruido-a-prova-dagua-compativel-com-ios-samsung-galaxy-android-tws-wireless-air-premium-microfone-touch-marca-pro-phone-see/p/MLB58519492#polycard_client=recommendations_home-deals&reco_backend=deals-model-odin&wid=MLB5758097762&reco_client=home-deals&reco_item_pos=4&reco_backend_type=low_level&reco_id=cb5c1687-10a5-4c49-9c57-6cc8ff519983&sid=recos&c_id=/home/promotions-recommendations/element&c_uid=dfc0d1b8-3eba-43da-9e36-e126072ad33f",
       "marketplace": "mercadolivre",
-      "timestamp": "2026-05-08T11:23:22.993234",
-      "elapsed_seconds": 16.139101028442383,
+      "timestamp": "2026-05-08T13:30:49.192094",
+      "elapsed_seconds": 14.872442960739136,
       "success": true,
       "error_code": null,
       "collection": {
@@ -50,7 +51,7 @@
         "status_code": 200,
         "blocked": false,
         "captcha_detected": false,
-        "html_length": 1367702,
+        "html_length": 1414307,
         "payload_count": 0,
         "error": null
       },
@@ -59,14 +60,15 @@
         "url": "https://www.mercadolivre.com.br/fone-ouvido-bluetooth-54-sem-fio-estojo-de-carregamento-anti-ruido-a-prova-dagua-compativel-com-ios-samsung-galaxy-android-tws-wireless-air-premium-microfone-touch-marca-pro-phone-see/p/MLB58519492",
         "canonical_url": "https://www.mercadolivre.com.br/fone-ouvido-bluetooth-54-sem-fio-estojo-de-carregamento-anti-ruido-a-prova-dagua-compativel-com-ios-samsung-galaxy-android-tws-wireless-air-premium-microfone-touch-marca-pro-phone-see/p/MLB58519492",
         "title": "Fone Ouvido Bluetooth 5.4 Sem Fio Estojo De Carregamento Anti Ruido A Prova Dagua Compatível Com Ios Samsung Galaxy Android Tws Wireless Air Premium Microfone Touch Marca Pro Phone See",
-        "price": "78.90",
+        "price": "49.72",
         "currency": "BRL",
         "available": true,
         "seller": "Produtos do PRO PHONE SEE",
         "product_id": "MLB58519492",
-        "extraction_method": "css_selector",
-        "confidence": 0.85,
-        "collected_at": "2026-05-08T14:23:22.989493Z"
+        "thumbnail_url": "https://http2.mlstatic.com/D_NQ_NP_653869-MLA106986107684_022026-O.webp",
+        "extraction_method": "ssr_state",
+        "confidence": 0.92,
+        "collected_at": "2026-05-08T16:30:49.188512Z"
       },
       "diagnosis": {
         "status": "success",
@@ -77,10 +79,10 @@
     {
       "url": "https://produto.mercadolivre.com.br/MLB-2891662887-kit-soleira-resinada-proteco-4-portas-8-pecas-fiat-toro-_JM#reco_item_pos=0&reco_backend=item_decorator&reco_backend_type=function&reco_client=home_items-decorator-legacy&reco_id=6a03d1e6-735b-4e7c-82a2-f82f61f1b27b&reco_model=&c_id=/home/navigation-recommendations-seed/element&c_uid=c003e687-f5db-4d0c-89eb-2e1ad0bc63d2&da_id=navigation&da_position=1&id_origin=/home/dynamic_access&da_sort_algorithm=ranker",
       "marketplace": "mercadolivre",
-      "timestamp": "2026-05-08T11:23:58.751474",
-      "elapsed_seconds": 27.744683742523193,
+      "timestamp": "2026-05-08T13:31:26.864100",
+      "elapsed_seconds": 29.670223236083984,
       "success": false,
-      "error_code": "CAPTCHA_DETECTED",
+      "error_code": "REDIRECT",
       "collection": {
         "final_url": "https://www.mercadolivre.com.br/MLB-2891662887-kit-soleira-resinada-proteco-4-portas-8-pecas-fiat-toro-_JM",
         "status_code": 404,
@@ -90,18 +92,20 @@
         "payload_count": 0,
         "error": null
       },
-      "extraction": "CAPTCHA_DETECTED",
+      "extraction": "REDIRECT",
       "diagnosis": {
         "status": "failed",
-        "cause": null,
-        "recommendations": []
+        "cause": "REDIRECIONAMENTO_NAO_PRODUTO",
+        "recommendations": [
+          "Página parece ser de busca/recomendação, não de produto único"
+        ]
       }
     },
     {
       "url": "https://www.mercadolivre.com.br/soleira-protetor-porta-resinada-fiat-strada-ultra-2025-2026/up/MLBU3812407091#polycard_client=recommendations_home_navigation-recommendations&reco_backend=machinalis-homes-univb-equivalent-offer&reco_client=home_navigation-recommendations&reco_item_pos=4&reco_backend_type=function&reco_id=3e5a5d46-b59c-4d08-935b-c04c4a229fe1&wid=MLB6325790006&sid=recos&c_id=/home/navigation-recommendations/element&c_uid=b8d42271-0c01-4a59-ac6f-dd46641a4f1b",
       "marketplace": "mercadolivre",
-      "timestamp": "2026-05-08T11:24:30.574389",
-      "elapsed_seconds": 23.810497522354126,
+      "timestamp": "2026-05-08T13:31:50.701190",
+      "elapsed_seconds": 15.836336612701416,
       "success": true,
       "error_code": null,
       "collection": {
@@ -109,7 +113,7 @@
         "status_code": 200,
         "blocked": false,
         "captcha_detected": false,
-        "html_length": 835532,
+        "html_length": 822576,
         "payload_count": 0,
         "error": null
       },
@@ -118,14 +122,15 @@
         "url": "https://www.mercadolivre.com.br/soleira-protetor-porta-resinada-fiat-strada-ultra-2025-2026/up/MLBU3812407091",
         "canonical_url": "https://www.mercadolivre.com.br/soleira-protetor-porta-resinada-fiat-strada-ultra-2025-2026/up/MLBU3812407091",
         "title": "Soleira Protetor Porta Resinada Fiat Strada Ultra 2025 2026",
-        "price": "59.90",
+        "price": "59.9",
         "currency": "BRL",
         "available": true,
         "seller": "Produtos do vendedor",
-        "product_id": null,
-        "extraction_method": "css_selector",
-        "confidence": 0.85,
-        "collected_at": "2026-05-08T14:24:30.570177Z"
+        "product_id": "MLBU3812407091",
+        "thumbnail_url": "https://http2.mlstatic.com/D_NQ_NP_710927-MLB107860664869_022026-O.webp",
+        "extraction_method": "ssr_state",
+        "confidence": 0.92,
+        "collected_at": "2026-05-08T16:31:50.699086Z"
       },
       "diagnosis": {
         "status": "success",
@@ -136,8 +141,8 @@
     {
       "url": "https://www.mercadolivre.com.br/fone-ouvido-bluetooth-espelho-impermeavel-display-luz-led-sem-fio-compativel-com-celular-xiaomi-samsung-motorola-iphone-touch-wireless-portatil-profissional-anti-ruido-caixa-usb-carregar-visor-digital/p/MLB67692194?pdp_filters=seller_id%3A426308070#polycard_client=recommendations_pdp-seller_items-above&reco_backend=ranker-retsys-same-seller&reco_model=rk_entity_sameseller&reco_client=pdp-seller_items-above&reco_item_pos=1&reco_backend_type=low_level&reco_id=ce9786cf-a667-422c-8a3c-ded5dcaec8b6&wid=MLB6595018896&sid=recos",
       "marketplace": "mercadolivre",
-      "timestamp": "2026-05-08T11:24:54.039043",
-      "elapsed_seconds": 15.462948560714722,
+      "timestamp": "2026-05-08T13:32:11.685265",
+      "elapsed_seconds": 12.968650817871094,
       "success": true,
       "error_code": null,
       "collection": {
@@ -145,7 +150,7 @@
         "status_code": 200,
         "blocked": false,
         "captcha_detected": false,
-        "html_length": 1308677,
+        "html_length": 1327768,
         "payload_count": 0,
         "error": null
       },
@@ -154,14 +159,15 @@
         "url": "https://www.mercadolivre.com.br/fone-ouvido-bluetooth-espelho-impermeavel-display-luz-led-sem-fio-compativel-com-celular-xiaomi-samsung-motorola-iphone-touch-wireless-portatil-profissional-anti-ruido-caixa-usb-carregar-visor-digital/p/MLB67692194?pdp_filters=seller_id%3A426308070",
         "canonical_url": "https://www.mercadolivre.com.br/fone-ouvido-bluetooth-espelho-impermeavel-display-luz-led-sem-fio-compativel-com-celular-xiaomi-samsung-motorola-iphone-touch-wireless-portatil-profissional-anti-ruido-caixa-usb-carregar-visor-digital/p/MLB67692194",
         "title": "Fone Ouvido Bluetooth Espelho Impermeável Display Luz Led Sem Fio Compatível Com Celular Xiaomi Samsung Motorola iPhone Touch Wireless Portátil Profissional Anti Ruido Caixa Usb Carregar Visor Digital",
-        "price": "52.90",
+        "price": "42.32",
         "currency": "BRL",
         "available": true,
         "seller": "Produtos do PRO PHONE SEE",
         "product_id": "MLB67692194",
-        "extraction_method": "css_selector",
-        "confidence": 0.85,
-        "collected_at": "2026-05-08T14:24:54.035734Z"
+        "thumbnail_url": "https://http2.mlstatic.com/D_NQ_NP_754578-MLA109279089976_042026-O.webp",
+        "extraction_method": "ssr_state",
+        "confidence": 0.92,
+        "collected_at": "2026-05-08T16:32:11.682195Z"
       },
       "diagnosis": {
         "status": "success",
@@ -172,8 +178,8 @@
     {
       "url": "https://www.mercadolivre.com.br/celular-samsung-galaxy-a17-5g-com-ia-256gb-8gb-ram-cm-de-50mp-tela-de-67-nfc-ip54-cinza/p/MLB54961626#polycard_client=recommendations_home_second-best-navigation-trend-recommendations&reco_backend=machinalis-homes-univb&wid=MLB6593889648&reco_client=home_second-best-navigation-trend-recommendations&reco_item_pos=1&reco_backend_type=function&reco_id=87d4bcca-e939-4ffb-a47a-e1076a953681&sid=recos&c_id=/home/second-best-navigation-trend-recommendations/element&c_uid=e623112d-2c8c-4ade-b1e2-a0360a22017c",
       "marketplace": "mercadolivre",
-      "timestamp": "2026-05-08T11:25:16.935120",
-      "elapsed_seconds": 14.882892370223999,
+      "timestamp": "2026-05-08T13:32:31.398199",
+      "elapsed_seconds": 11.706660032272339,
       "success": true,
       "error_code": null,
       "collection": {
@@ -181,7 +187,7 @@
         "status_code": 200,
         "blocked": false,
         "captcha_detected": false,
-        "html_length": 851691,
+        "html_length": 937329,
         "payload_count": 0,
         "error": null
       },
@@ -190,14 +196,15 @@
         "url": "https://www.mercadolivre.com.br/celular-samsung-galaxy-a17-5g-com-ia-256gb-8gb-ram-cm-de-50mp-tela-de-67-nfc-ip54-cinza/p/MLB54961626",
         "canonical_url": "https://www.mercadolivre.com.br/celular-samsung-galaxy-a17-5g-com-ia-256gb-8gb-ram-cm-de-50mp-tela-de-67-nfc-ip54-cinza/p/MLB54961626",
         "title": "Celular Samsung Galaxy A17 5g Com Ia, 256gb, 8gb Ram, Câm De 50mp, Tela De 6.7 , Nfc, Ip54 - Cinza",
-        "price": "1517.78",
+        "price": "1366.0",
         "currency": "BRL",
         "available": true,
-        "seller": null,
+        "seller": "Produtos do Samsung",
         "product_id": "MLB54961626",
-        "extraction_method": "css_selector",
-        "confidence": 0.85,
-        "collected_at": "2026-05-08T14:25:16.932267Z"
+        "thumbnail_url": "https://http2.mlstatic.com/D_NQ_NP_702537-MLA100077733515_122025-O.webp",
+        "extraction_method": "ssr_state",
+        "confidence": 0.92,
+        "collected_at": "2026-05-08T16:32:31.395808Z"
       },
       "diagnosis": {
         "status": "success",
@@ -208,8 +215,8 @@
     {
       "url": "https://www.mercadolivre.com.br/notebook-asus-vivobook-15-x1504va-intel-core-i5-1334u-8gb-ram-512gb-ssd-intel-iris-xe-windows-11-home-tela-156-fhd-silver-nj1740w/p/MLB48549236#polycard_client=recommendations_home-deals&reco_backend=deals-model-odin&wid=MLB5356528958&reco_client=home-deals&reco_item_pos=6&reco_backend_type=low_level&reco_id=da57a626-cc3a-45b8-88c4-ff378b0b8edc&sid=recos&c_id=/home/promotions-recommendations/element&c_uid=0ef6e7a7-6f83-4484-9c27-3215fd05aee1",
       "marketplace": "mercadolivre",
-      "timestamp": "2026-05-08T11:25:42.685366",
-      "elapsed_seconds": 17.74208164215088,
+      "timestamp": "2026-05-08T13:32:57.604475",
+      "elapsed_seconds": 18.193881511688232,
       "success": true,
       "error_code": null,
       "collection": {
@@ -217,7 +224,7 @@
         "status_code": 200,
         "blocked": false,
         "captcha_detected": false,
-        "html_length": 1437140,
+        "html_length": 1437552,
         "payload_count": 0,
         "error": null
       },
@@ -226,14 +233,15 @@
         "url": "https://www.mercadolivre.com.br/notebook-asus-vivobook-15-x1504va-intel-core-i5-1334u-8gb-ram-512gb-ssd-intel-iris-xe-windows-11-home-tela-156-fhd-silver-nj1740w/p/MLB48549236",
         "canonical_url": "https://www.mercadolivre.com.br/notebook-asus-vivobook-15-x1504va-intel-core-i5-1334u-8gb-ram-512gb-ssd-intel-iris-xe-windows-11-home-tela-156-fhd-silver-nj1740w/p/MLB48549236",
         "title": "Notebook Asus Vivobook 15 X1504va Intel Core I5 1334u 8gb Ram 512gb Ssd Intel Iris Xe Windows 11 Home Tela 15,6 Fhd Silver - Nj1740w",
-        "price": "4499.31",
+        "price": "3629.9",
         "currency": "BRL",
         "available": true,
-        "seller": "Produtos do Asus",
+        "seller": "Produtos do 2Eletro",
         "product_id": "MLB48549236",
-        "extraction_method": "css_selector",
-        "confidence": 0.85,
-        "collected_at": "2026-05-08T14:25:42.681749Z"
+        "thumbnail_url": "https://http2.mlstatic.com/D_NQ_NP_704459-MLA99979883783_112025-O.webp",
+        "extraction_method": "ssr_state",
+        "confidence": 0.92,
+        "collected_at": "2026-05-08T16:32:57.599538Z"
       },
       "diagnosis": {
         "status": "success",
@@ -244,8 +252,8 @@
     {
       "url": "https://www.mercadolivre.com.br/kit-jogo-de-ferramentas-200-pecas-com-maleta-resistente-titanium-platina/p/MLB35153376#polycard_client=recommendations_home-deals&reco_backend=deals-model-odin&wid=MLB6233871348&reco_client=home-deals&reco_item_pos=1&reco_backend_type=low_level&reco_id=031401df-2b3a-4f27-bef9-a8d937cc0a91&sid=recos&c_id=/home/promotions-recommendations/element&c_uid=698a5f59-4ee8-4186-8e7c-2bb3dbfb8630",
       "marketplace": "mercadolivre",
-      "timestamp": "2026-05-08T11:26:06.450061",
-      "elapsed_seconds": 15.756799697875977,
+      "timestamp": "2026-05-08T13:33:23.016387",
+      "elapsed_seconds": 17.401077032089233,
       "success": true,
       "error_code": null,
       "collection": {
@@ -253,7 +261,7 @@
         "status_code": 200,
         "blocked": false,
         "captcha_detected": false,
-        "html_length": 1342562,
+        "html_length": 1368382,
         "payload_count": 0,
         "error": null
       },
@@ -262,14 +270,15 @@
         "url": "https://www.mercadolivre.com.br/kit-jogo-de-ferramentas-200-pecas-com-maleta-resistente-titanium-platina/p/MLB35153376",
         "canonical_url": "https://www.mercadolivre.com.br/kit-jogo-de-ferramentas-200-pecas-com-maleta-resistente-titanium-platina/p/MLB35153376",
         "title": "kit Jogo de Ferramentas 200 Peças com Maleta Resistente - Titanium Platina",
-        "price": "78.90",
+        "price": "58.41",
         "currency": "BRL",
         "available": true,
         "seller": "Produtos do Titanium Platina",
         "product_id": "MLB35153376",
-        "extraction_method": "css_selector",
-        "confidence": 0.85,
-        "collected_at": "2026-05-08T14:26:06.446085Z"
+        "thumbnail_url": "https://http2.mlstatic.com/D_NQ_NP_732857-MLA100010265655_122025-O.webp",
+        "extraction_method": "ssr_state",
+        "confidence": 0.92,
+        "collected_at": "2026-05-08T16:33:23.012906Z"
       },
       "diagnosis": {
         "status": "success",
@@ -280,8 +289,8 @@
     {
       "url": "https://www.mercadolivre.com.br/mesa-portatil-multifuncional-ergonmica-para-sofa-e-cama/p/MLB67646424#polycard_client=recommendations_home_navigation-related-recommendations&reco_backend=recomm_platform_exp_com_org_rfa&wid=MLB6651575654&reco_client=home_navigation-related-recommendations&reco_item_pos=3&reco_backend_type=function&reco_id=5c218eef-5909-4a48-9d01-bb3cdd45f2d8&sid=recos&c_id=/home/navigation-related-recommendations/element&c_uid=7c20f3a6-3816-4e5d-a266-98c6fcfdad90",
       "marketplace": "mercadolivre",
-      "timestamp": "2026-05-08T11:26:26.686260",
-      "elapsed_seconds": 12.226399183273315,
+      "timestamp": "2026-05-08T13:33:45.171547",
+      "elapsed_seconds": 14.143978595733643,
       "success": true,
       "error_code": null,
       "collection": {
@@ -289,7 +298,7 @@
         "status_code": 200,
         "blocked": false,
         "captcha_detected": false,
-        "html_length": 1276138,
+        "html_length": 1273052,
         "payload_count": 0,
         "error": null
       },
@@ -298,14 +307,15 @@
         "url": "https://www.mercadolivre.com.br/mesa-portatil-multifuncional-ergonmica-para-sofa-e-cama/p/MLB67646424",
         "canonical_url": "https://www.mercadolivre.com.br/mesa-portatil-multifuncional-ergonmica-para-sofa-e-cama/p/MLB67646424",
         "title": "Mesa portátil multifuncional ergonômica para sofá e cama",
-        "price": "223.75",
+        "price": "179.0",
         "currency": "BRL",
         "available": true,
         "seller": "Produtos do VIE IDEALE",
         "product_id": "MLB67646424",
-        "extraction_method": "css_selector",
-        "confidence": 0.85,
-        "collected_at": "2026-05-08T14:26:26.682765Z"
+        "thumbnail_url": "https://http2.mlstatic.com/D_NQ_NP_876231-MLA109259055540_042026-O.webp",
+        "extraction_method": "ssr_state",
+        "confidence": 0.92,
+        "collected_at": "2026-05-08T16:33:45.168603Z"
       },
       "diagnosis": {
         "status": "success",
@@ -316,8 +326,8 @@
     {
       "url": "https://www.mercadolivre.com.br/mesa-portatil-para-laptop-e-escritorio-mecolour-inclui-mouse-pad-e-apoio-para-os-pulsos/p/MLB59433754?pdp_filters=item_id:MLB4275184507#polycard_client=recommendations_pdp-pads-up&wid=MLB4275184507&sid=recos&reco_backend=recomm_platform_base_pads_rfa_MERGE&reco_model=search_recos_backend_merge&reco_client=pdp-pads-up&reco_item_pos=0&reco_backend_type=low_level&reco_id=6d29d72d-671a-4e89-b1f0-a15a1ebb8559&is_advertising=true&ad_domain=PDPDESKTOP_UP&ad_position=1&ad_click_id=MmJhOWQ1YjktNWRiMC00MmFjLWI5OTMtMTkzZjUzMTUzNmM0",
       "marketplace": "mercadolivre",
-      "timestamp": "2026-05-08T11:26:49.021516",
-      "elapsed_seconds": 14.327245235443115,
+      "timestamp": "2026-05-08T13:34:05.413469",
+      "elapsed_seconds": 12.231098651885986,
       "success": true,
       "error_code": null,
       "collection": {
@@ -325,7 +335,7 @@
         "status_code": 200,
         "blocked": false,
         "captcha_detected": false,
-        "html_length": 1262666,
+        "html_length": 1267132,
         "payload_count": 0,
         "error": null
       },
@@ -334,14 +344,15 @@
         "url": "https://www.mercadolivre.com.br/mesa-portatil-para-laptop-e-escritorio-mecolour-inclui-mouse-pad-e-apoio-para-os-pulsos/p/MLB59433754?pdp_filters=item_id%3AMLB4275184507",
         "canonical_url": "https://www.mercadolivre.com.br/mesa-portatil-para-laptop-e-escritorio-mecolour-inclui-mouse-pad-e-apoio-para-os-pulsos/p/MLB59433754",
         "title": "Mesa Portátil Para Laptop E Escritório Mecolour Inclui Mouse Pad E Apoio Para Os Pulsos",
-        "price": "199.93",
+        "price": "163.93",
         "currency": "BRL",
         "available": true,
         "seller": "Produtos do vendedor",
         "product_id": "MLB59433754",
-        "extraction_method": "css_selector",
-        "confidence": 0.85,
-        "collected_at": "2026-05-08T14:26:49.018450Z"
+        "thumbnail_url": "https://http2.mlstatic.com/D_NQ_NP_979364-MLA109929134708_042026-O.webp",
+        "extraction_method": "ssr_state",
+        "confidence": 0.92,
+        "collected_at": "2026-05-08T16:34:05.410132Z"
       },
       "diagnosis": {
         "status": "success",
@@ -352,8 +363,8 @@
     {
       "url": "https://www.mercadolivre.com.br/kit-adesivo-skin-notebook-dell-inspiron-15-3520/up/MLBU3866209758#polycard_client=recommendations_home_navigation-related-recommendations&reco_backend=recomm_platform_exp_com_org_rfa&reco_client=home_navigation-related-recommendations&reco_item_pos=2&reco_backend_type=function&reco_id=67029004-3a01-4e5b-ae74-3782d3266fbc&wid=MLB4555354243&sid=recos&c_id=/home/navigation-related-recommendations/element&c_uid=86f502bf-caa3-48a2-a070-3957b70cdb8c",
       "marketplace": "mercadolivre",
-      "timestamp": "2026-05-08T11:27:09.821015",
-      "elapsed_seconds": 12.79706358909607,
+      "timestamp": "2026-05-08T13:34:26.678370",
+      "elapsed_seconds": 13.256618738174438,
       "success": true,
       "error_code": null,
       "collection": {
@@ -361,7 +372,7 @@
         "status_code": 200,
         "blocked": false,
         "captcha_detected": false,
-        "html_length": 698767,
+        "html_length": 702692,
         "payload_count": 0,
         "error": null
       },
@@ -370,14 +381,15 @@
         "url": "https://www.mercadolivre.com.br/kit-adesivo-skin-notebook-dell-inspiron-15-3520/up/MLBU3866209758",
         "canonical_url": "https://www.mercadolivre.com.br/kit-adesivo-skin-notebook-dell-inspiron-15-3520/up/MLBU3866209758",
         "title": "Kit Adesivo Skin Notebook Dell Inspiron 15 3520",
-        "price": "125.35",
+        "price": "125.0",
         "currency": "BRL",
         "available": true,
         "seller": "Produtos do vendedor",
-        "product_id": null,
-        "extraction_method": "css_selector",
-        "confidence": 0.85,
-        "collected_at": "2026-05-08T14:27:09.813575Z"
+        "product_id": "MLBU3866209758",
+        "thumbnail_url": "https://http2.mlstatic.com/D_NQ_NP_932629-MLB109367107495_032026-O.webp",
+        "extraction_method": "ssr_state",
+        "confidence": 0.92,
+        "collected_at": "2026-05-08T16:34:26.674545Z"
       },
       "diagnosis": {
         "status": "success",
@@ -388,8 +400,8 @@
     {
       "url": "https://www.mercadolivre.com.br/chave-tigre-boca-universal-48-em-1-profissional-360-graus/up/MLBU2877191651#polycard_client=recommendations_home_third-best-navigation-trend-recommendations&reco_backend=machinalis-homes-univb&reco_client=home_third-best-navigation-trend-recommendations&reco_item_pos=3&reco_backend_type=function&reco_id=c34e6d0e-487d-4032-b849-9f96fcdd71e3&wid=MLB3924853397&sid=recos&c_id=/home/third-best-navigation-trend-recommendations/element&c_uid=cd65e8a8-8006-4f73-832a-0ca8e1335d6d",
       "marketplace": "mercadolivre",
-      "timestamp": "2026-05-08T11:27:32.509163",
-      "elapsed_seconds": 14.6717209815979,
+      "timestamp": "2026-05-08T13:34:48.210088",
+      "elapsed_seconds": 13.516999244689941,
       "success": true,
       "error_code": null,
       "collection": {
@@ -397,7 +409,7 @@
         "status_code": 200,
         "blocked": false,
         "captcha_detected": false,
-        "html_length": 966899,
+        "html_length": 943978,
         "payload_count": 0,
         "error": null
       },
@@ -406,14 +418,15 @@
         "url": "https://www.mercadolivre.com.br/chave-tigre-boca-universal-48-em-1-profissional-360-graus/up/MLBU2877191651",
         "canonical_url": "https://www.mercadolivre.com.br/chave-tigre-boca-universal-48-em-1-profissional-360-graus/up/MLBU2877191651",
         "title": "Chave Tigre Boca Universal 48 Em 1 Profissional 360º Graus",
-        "price": "56.63",
+        "price": "29.14",
         "currency": "BRL",
         "available": true,
         "seller": "Produtos do vendedor",
-        "product_id": null,
-        "extraction_method": "css_selector",
-        "confidence": 0.85,
-        "collected_at": "2026-05-08T14:27:32.500756Z"
+        "product_id": "MLBU2877191651",
+        "thumbnail_url": "https://http2.mlstatic.com/D_NQ_NP_601384-MLB81157437435_122024-O.webp",
+        "extraction_method": "ssr_state",
+        "confidence": 0.92,
+        "collected_at": "2026-05-08T16:34:48.206789Z"
       },
       "diagnosis": {
         "status": "success",
@@ -424,8 +437,8 @@
     {
       "url": "https://www.mercadolivre.com.br/kit-jogo-de-alicates-universal-corte-bico-e-presso-4-pcs/p/MLB68983562#polycard_client=recommendations_home_navigation-related-recommendations&reco_backend=recomm_platform_exp_com_org_rfa&wid=MLB6703612652&reco_client=home_navigation-related-recommendations&reco_item_pos=3&reco_backend_type=function&reco_id=ee55a619-534f-462e-bd5f-7fd6573e949b&sid=recos&c_id=/home/navigation-related-recommendations/element&c_uid=d864e221-2149-4a44-b5a7-9598c605ede7",
       "marketplace": "mercadolivre",
-      "timestamp": "2026-05-08T11:27:49.736694",
-      "elapsed_seconds": 9.220678091049194,
+      "timestamp": "2026-05-08T13:35:10.861563",
+      "elapsed_seconds": 14.647331714630127,
       "success": true,
       "error_code": null,
       "collection": {
@@ -433,7 +446,7 @@
         "status_code": 200,
         "blocked": false,
         "captcha_detected": false,
-        "html_length": 1131938,
+        "html_length": 1127944,
         "payload_count": 0,
         "error": null
       },
@@ -442,14 +455,15 @@
         "url": "https://www.mercadolivre.com.br/kit-jogo-de-alicates-universal-corte-bico-e-presso-4-pcs/p/MLB68983562",
         "canonical_url": "https://www.mercadolivre.com.br/kit-jogo-de-alicates-universal-corte-bico-e-presso-4-pcs/p/MLB68983562",
         "title": "Kit Jogo De Alicates Universal Corte Bico E Pressão 4 Pçs",
-        "price": "78.99",
+        "price": "57.97",
         "currency": "BRL",
         "available": true,
         "seller": "Produtos do SilPro Tech",
         "product_id": "MLB68983562",
-        "extraction_method": "css_selector",
-        "confidence": 0.85,
-        "collected_at": "2026-05-08T14:27:49.733456Z"
+        "thumbnail_url": "https://http2.mlstatic.com/D_NQ_NP_842889-MLA110184982238_052026-O.webp",
+        "extraction_method": "ssr_state",
+        "confidence": 0.92,
+        "collected_at": "2026-05-08T16:35:10.857580Z"
       },
       "diagnosis": {
         "status": "success",

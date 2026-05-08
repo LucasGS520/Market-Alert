@@ -66,6 +66,9 @@ class PriceHistory(Base):
     currency: Mapped[str | None] = mapped_column(String(8), nullable=True)
     extraction_method: Mapped[str | None] = mapped_column(String(64), nullable=True)
     confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    thumbnail_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    canonical_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    product_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     # Relações
     monitored_product: Mapped["MonitoredProduct | None"] = relationship(  # noqa: F821

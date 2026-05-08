@@ -23,3 +23,8 @@ class PriceHistoryRead(BaseModel):
     price: Decimal
     is_available: bool
     collected_at: datetime
+    title: str | None = None
+    seller: str | None = None
+    thumbnail_url: str | None = None
+    extraction_method: str | None = None
+    confidence: float | None = None

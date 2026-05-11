@@ -4,15 +4,6 @@ Ponto de entrada da aplicação FastAPI — market_alert.
 Este arquivo inicializa o servidor web, configura os middlewares e registra
 todos os routers. É o primeiro arquivo carregado pelo Uvicorn.
 
-Estrutura geral da aplicação:
-    core/        → configuração, banco de dados, Redis
-    models/      → tabelas do PostgreSQL (SQLAlchemy ORM)
-    schemas/     → contratos da API (Pydantic)
-    api/v1/      → endpoints REST organizados por domínio
-    services/    → lógica de negócio (coleta, comparação, notificações)
-    clients/     → comunicação com serviços externos (scraper, ntfy, telert)
-    workers/     → processamento assíncrono em background (Celery)
-
 Para iniciar localmente (fora do Docker):
     uvicorn app.main:app --reload --port 8000
 
@@ -27,7 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.v1.router import router
-from app.core.database import engine
+from app.infra.database import engine
 
 logger = structlog.get_logger()
 

@@ -29,9 +29,11 @@ venv.bak/
 # Environment files
 .env
 .env.*
+!.env.example
 
 # Test / coverage
 .pytest_cache/
+pytest-cache-files-*/
 .coverage
 .coverage.*
 htmlcov/

@@ -38,6 +38,11 @@ class Settings(BaseSettings):
     # ── Rate Limiting de Domínio ───────────────────────────────────────────
     domain_captcha_cooldown_seconds: int = 300
 
+    # ── Retry e Backoff de Coleta ──────────────────────────────────────────
+    collection_retry_base_delay_minutes: int = 5
+    collection_retry_max_delay_minutes: int = 60
+    collection_run_timeout_seconds: int = 300  # SLA máximo de uma rodada coordenada
+
     # ── Servidor ───────────────────────────────────────────────────────────
     log_level: str = "INFO"
 

@@ -11,7 +11,7 @@ class PriceHistoryRead(BaseModel):
     id: uuid.UUID
     monitored_id: uuid.UUID | None
     competitor_id: uuid.UUID | None
-    price: Decimal
+    price: Decimal | None  # NULL quando is_available = False (migração pendente no modelo)
     is_available: bool
     collected_at: datetime
     title: str | None = None

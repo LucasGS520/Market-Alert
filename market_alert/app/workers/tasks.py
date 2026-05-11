@@ -1,23 +1,23 @@
 """
 Tarefas Celery — processamento assíncrono em background.
 
-Este módulo define as três tarefas que compõem o pipeline de monitoramento:
-
 ━━━ collector_task ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Coleta o preço de um produto monitorado OU de um concorrente.
-    Quando coleta um produto principal, automaticamente:
-        1. Enfileira a coleta de todos os seus concorrentes
-        2. Enfileira o recálculo da comparação
-    Retenta até 3 vezes em caso de falha do scraper.
+    Aceita exatamente um dos dois IDs. Para produto principal:
+        1. Cria rodada coordenada em Redis com concorrentes elegíveis
+        2. Enfileira coleta de cada concorrente com run_id
+        3. Enfileira comparison_task que aguarda conclusão da rodada
+    Retenta até 3 vezes em caso de falha retryable do scraper.
 
 ━━━ comparison_task ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    Recalcula ranking, médias e status competitivo de um produto monitorado.
-    Ao final, avalia e dispara notificações se necessário.
+    Recalcula ranking, médias e status competitivo de um produto.
+    Quando recebe run_id, aguarda conclusão da rodada coordenada
+    (retenta até 25 × 15 s = 375 s) antes de calcular.
 
 ━━━ scheduler_task ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Rodado pelo Celery Beat a cada 1 minuto.
-    Consulta quais produtos têm next_check_at <= agora e enfileira
-    uma collector_task para cada um.
+    Busca produtos elegíveis (pending, active, unavailable, error)
+    com next_check_at <= agora. Máximo 100 por execução.
 
 Nota sobre async dentro do Celery:
     O Celery é síncrono por natureza. Para chamar funções async dos serviços,
@@ -26,7 +26,9 @@ Nota sobre async dentro do Celery:
 """
 
 import asyncio
+import time
 import uuid
+from datetime import datetime, timezone
 from decimal import Decimal
 
 import structlog
@@ -41,6 +43,7 @@ from app.products.competitor.competitor_service import collect_competitor
 from app.products.monitored.monitored_model import MonitoredProduct
 from app.products.monitored.monitored_service import collect_product
 from app.workers.celery_app import celery_app
+from app.workers.collection_run import is_complete, mark_done, start_run
 from app.workers.redis import get_redis
 
 logger = structlog.get_logger()
@@ -49,29 +52,43 @@ logger = structlog.get_logger()
 @celery_app.task(
     bind=True,
     max_retries=3,
-    default_retry_delay=60,  # aguarda 60s entre tentativas
+    default_retry_delay=60,
     name="app.workers.tasks.collector_task",
 )
 def collector_task(
     self: Task,
     product_id: str | None = None,
     competitor_id: str | None = None,
+    run_id: str | None = None,
 ) -> None:
-    """
-    Coleta o preço de um produto monitorado ou de um concorrente.
+    """Coleta preço de um produto monitorado ou de um concorrente.
 
-    Aceita exatamente um dos dois parâmetros. Se product_id for passado,
-    após a coleta enfileira a coleta dos concorrentes e o recálculo.
+    Aceita exatamente um entre product_id e competitor_id.
+    run_id identifica a rodada coordenada à qual este concorrente pertence.
 
     Args:
-        product_id:    UUID do MonitoredProduct (como string).
-        competitor_id: UUID do Competitor (como string).
+        product_id:    UUID do MonitoredProduct (string).
+        competitor_id: UUID do Competitor (string).
+        run_id:        product_id da rodada coordenada, quando aplicável.
     """
     redis = get_redis()
     scraper = ScraperClient()
+    inicio = time.monotonic()
+
+    if bool(product_id) == bool(competitor_id):
+        logger.error(
+            "collector_task_parametros_invalidos",
+            product_id=product_id,
+            competitor_id=competitor_id,
+        )
+        return
 
     async def _executar():
+        from app.infra.config import settings
+
         async with AsyncSessionLocal() as session:
+
+            # ── Coleta de produto monitorado ────────────────────────────────
             if product_id:
                 pid = uuid.UUID(product_id)
                 produto = await session.get(MonitoredProduct, pid)
@@ -79,43 +96,93 @@ def collector_task(
                 if not produto:
                     logger.warning("produto_nao_encontrado", produto_id=product_id)
                     return
-                if produto.status == "paused":
-                    logger.info("produto_pausado_pulando", produto_id=product_id)
+                if produto.status in ("paused", "unsupported"):
+                    logger.info(
+                        "produto_inelegivel_pulando",
+                        produto_id=product_id,
+                        status=produto.status,
+                    )
                     return
 
-                # Guarda preço anterior para comparação na notification
                 preco_anterior = Decimal(str(produto.current_price)) if produto.current_price else None
 
+                logger.info(
+                    "collector_task_iniciando",
+                    fase="produto",
+                    produto_id=product_id,
+                    tentativa=self.request.retries,
+                )
+
                 try:
-                    await collect_product(session, redis, scraper, produto)
+                    resultado = await collect_product(session, redis, scraper, produto)
                 except ScraperUnavailableError as exc:
                     raise self.retry(exc=exc)
                 except ScraperParseError as exc:
                     if exc.error_result.retryable:
                         raise self.retry(exc=exc)
                     logger.warning(
-                        "erro_permanente_sem_retry",
+                        "coleta_permanentemente_falhada",
                         produto_id=product_id,
                         error_code=exc.error_result.error_code,
                     )
+                    return
+
+                coleta_ok = resultado.get("success", False)
+
+                if not coleta_ok:
+                    logger.info(
+                        "collector_task_concluido",
+                        fase="produto",
+                        produto_id=product_id,
+                        sucesso=False,
+                        razao=resultado.get("reason"),
+                        duracao_s=round(time.monotonic() - inicio, 2),
+                    )
+                    return
 
                 await session.refresh(produto)
                 preco_novo = Decimal(str(produto.current_price)) if produto.current_price else None
 
-                # Enfileira coleta de cada concorrente cadastrado
+                # Busca concorrentes elegíveis para compor a rodada
                 concorrentes_result = await session.execute(
-                    select(Competitor).where(Competitor.monitored_id == pid)
+                    select(Competitor).where(
+                        Competitor.monitored_id == pid,
+                        Competitor.status.notin_(["paused", "unsupported"]),
+                    )
                 )
-                for concorrente in concorrentes_result.scalars().all():
-                    collector_task.delay(competitor_id=str(concorrente.id))
+                concorrentes = concorrentes_result.scalars().all()
 
-                # Enfileira recálculo da comparação passando preços para avaliação de alertas
+                rodada_id: str | None = None
+                if concorrentes:
+                    rodada_id = product_id
+                    ids = [str(c.id) for c in concorrentes]
+                    start_run(redis, product_id, ids, timeout=settings.collection_run_timeout_seconds)
+                    for c in concorrentes:
+                        collector_task.delay(competitor_id=str(c.id), run_id=rodada_id)
+                    logger.info(
+                        "rodada_coordenada_iniciada",
+                        produto_id=product_id,
+                        total_concorrentes=len(concorrentes),
+                    )
+
                 comparison_task.delay(
                     monitored_id=product_id,
                     old_price=str(preco_anterior) if preco_anterior else None,
                     new_price=str(preco_novo) if preco_novo else None,
+                    run_id=rodada_id,
                 )
 
+                logger.info(
+                    "collector_task_concluido",
+                    fase="produto",
+                    produto_id=product_id,
+                    sucesso=True,
+                    total_concorrentes=len(concorrentes),
+                    rodada_coordenada=rodada_id is not None,
+                    duracao_s=round(time.monotonic() - inicio, 2),
+                )
+
+            # ── Coleta de concorrente ───────────────────────────────────────
             elif competitor_id:
                 cid = uuid.UUID(competitor_id)
                 concorrente = await session.get(Competitor, cid)
@@ -126,43 +193,89 @@ def collector_task(
 
                 monitored_id_str = str(concorrente.monitored_id)
 
-                resultado = None
+                logger.info(
+                    "collector_task_iniciando",
+                    fase="concorrente",
+                    concorrente_id=competitor_id,
+                    run_id=run_id,
+                    tentativa=self.request.retries,
+                )
+
                 try:
                     resultado = await collect_competitor(session, redis, scraper, concorrente)
                 except ScraperUnavailableError as exc:
+                    if run_id:
+                        mark_done(redis, run_id, competitor_id)
                     raise self.retry(exc=exc)
                 except ScraperParseError as exc:
+                    if run_id:
+                        mark_done(redis, run_id, competitor_id)
                     if exc.error_result.retryable:
                         raise self.retry(exc=exc)
                     logger.warning(
-                        "erro_permanente_sem_retry",
+                        "coleta_permanentemente_falhada",
                         concorrente_id=competitor_id,
                         error_code=exc.error_result.error_code,
                     )
                     return
 
-                if resultado is not None:
+                coleta_ok = resultado.get("success", False)
+
+                if run_id:
+                    # Parte de rodada coordenada: sinaliza conclusão (comparison já enfileirada)
+                    mark_done(redis, run_id, competitor_id)
+                elif coleta_ok:
+                    # Coleta autônoma (ex.: cadastro de novo concorrente): dispara comparação
                     comparison_task.delay(monitored_id=monitored_id_str)
+
+                logger.info(
+                    "collector_task_concluido",
+                    fase="concorrente",
+                    concorrente_id=competitor_id,
+                    sucesso=coleta_ok,
+                    run_id=run_id,
+                    duracao_s=round(time.monotonic() - inicio, 2),
+                )
 
     asyncio.run(_executar())
 
 
-@celery_app.task(bind=True, name="app.workers.tasks.comparison_task")
+@celery_app.task(
+    bind=True,
+    max_retries=25,  # 25 × 15 s = 375 s > SLA de rodada (300 s)
+    default_retry_delay=15,
+    name="app.workers.tasks.comparison_task",
+)
 def comparison_task(
     self: Task,
     monitored_id: str,
     old_price: str | None = None,
     new_price: str | None = None,
+    run_id: str | None = None,
 ) -> None:
-    """
-    Recalcula a comparação de preços e avalia notificações.
+    """Recalcula a comparação de preços e avalia notificações.
+
+    Quando run_id está presente, aguarda a conclusão da rodada coordenada
+    (todos os concorrentes coletados) antes de calcular, respeitando o SLA
+    de collection_run_timeout_seconds.
 
     Args:
-        monitored_id: UUID do MonitoredProduct.
-        old_price:    Preço antes da coleta (string Decimal), para detectar variação.
+        monitored_id: UUID do MonitoredProduct (string).
+        old_price:    Preço antes da coleta (string Decimal).
         new_price:    Preço após a coleta (string Decimal).
+        run_id:       product_id da rodada coordenada, se aplicável.
     """
     redis = get_redis()
+
+    # Aguarda rodada coordenada se ainda em andamento
+    if run_id and not is_complete(redis, run_id):
+        logger.info(
+            "comparacao_aguardando_rodada",
+            monitored_id=monitored_id,
+            run_id=run_id,
+            tentativa=self.request.retries,
+        )
+        raise self.retry()
 
     async def _executar():
         async with AsyncSessionLocal() as session:
@@ -171,7 +284,6 @@ def comparison_task(
 
             mid = uuid.UUID(monitored_id)
 
-            # Consulta o status competitivo anterior antes de recalcular
             comparacao_anterior = await session.scalar(
                 select(Comparison)
                 .where(Comparison.monitored_id == mid)
@@ -200,35 +312,44 @@ def comparison_task(
 
 @celery_app.task(name="app.workers.tasks.scheduler_task")
 def scheduler_task() -> None:
-    """
-    Verifica quais produtos estão prontos para coleta e os enfileira.
+    """Verifica quais produtos estão prontos para coleta e os enfileira.
 
-    Rodado pelo Celery Beat a cada 1 minuto. Consulta produtos com
-    status 'active' ou 'pending' e next_check_at <= agora, enfileirando
-    uma collector_task para cada um.
+    Rodado pelo Celery Beat a cada 1 minuto. Busca produtos elegíveis
+    (pending, active, unavailable, error) com next_check_at preenchido
+    e <= agora. Limite de 100 por ciclo para evitar thundering herd.
     """
-    from datetime import datetime, timezone
+    inicio = time.monotonic()
 
     async def _executar():
         async with AsyncSessionLocal() as session:
             agora = datetime.now(timezone.utc)
 
-            # Busca todos os produtos que já passaram do horário agendado
             resultado = await session.execute(
-                select(MonitoredProduct).where(
+                select(MonitoredProduct)
+                .where(
                     and_(
-                        MonitoredProduct.status.in_(["active", "pending"]),
+                        MonitoredProduct.status.in_(["pending", "active", "unavailable", "error"]),
                         MonitoredProduct.next_check_at <= agora,
+                        MonitoredProduct.next_check_at.isnot(None),
                     )
                 )
+                .limit(100)
             )
             produtos = resultado.scalars().all()
 
             for produto in produtos:
                 collector_task.delay(product_id=str(produto.id))
-                logger.debug("scheduler_enfileirou", produto_id=str(produto.id))
+                logger.debug(
+                    "agendamento_enfileirado",
+                    produto_id=str(produto.id),
+                    status=produto.status,
+                )
 
-            if produtos:
-                logger.info("scheduler_rodou", total_enfileirados=len(produtos))
+            logger.info(
+                "scheduler_rodou",
+                total_encontrados=len(produtos),
+                total_enfileirados=len(produtos),
+                duracao_s=round(time.monotonic() - inicio, 2),
+            )
 
     asyncio.run(_executar())

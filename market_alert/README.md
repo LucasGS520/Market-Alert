@@ -1,86 +1,205 @@
 # market_alert
 
-`market_alert` e o modulo de negocio responsavel por monitorar URLs de produtos,
-coletar precos via `market_scraper`, comparar o produto monitorado com seus
-concorrentes e disparar notificacoes quando houver variacao relevante.
+`market_alert` é o módulo de negócio responsável por monitorar URLs de produtos,
+coletar preços via `market_scraper`, comparar o produto monitorado com seus
+concorrentes e disparar notificações quando houver variação relevante.
 
-## Arquitetura atual
+## Arquitetura
 
 ```text
 FastAPI /api/v1
-  -> services de dominio
+  -> services de domínio
     -> PostgreSQL via SQLAlchemy async
-    -> Redis para locks, rate limit, cache e cooldown
-    -> Celery para coleta, comparacao e agendamento
+    -> Redis (DB 0) — locks, rate limit, cooldowns, rodadas coordenadas
+    -> Celery (broker DB 1, results DB 2) — coleta, comparação, agendamento
       -> market_scraper via HTTP
-      -> ntfy / telert para notificacoes
+      -> ntfy / telert para notificações
 ```
 
-O modulo esta organizado por fronteiras de dominio:
+Organização por fronteiras de domínio:
 
-- `app/api/v1`: camada HTTP fina. Valida entrada, chama servicos e retorna schemas.
-- `app/products`: agregado de produtos monitorados, concorrentes e historico de precos.
-- `app/comparison`: calculo e persistencia de snapshots competitivos.
-- `app/notifications`: deteccao de eventos, envio e log de notificacoes.
-- `app/infra`: configuracao, banco e clientes externos.
-- `app/workers`: Celery, scheduler, locks/cache Redis e tarefas assincronas.
+- `app/api/v1`: camada HTTP fina — valida entrada, chama serviços, retorna schemas
+- `app/products`: produtos monitorados, concorrentes e histórico de preços
+- `app/comparison`: cálculo e persistência de snapshots competitivos
+- `app/notifications`: detecção de eventos, envio e log de notificações
+- `app/infra`: configuração, banco, clientes externos e classificação de erros
+- `app/workers`: Celery, scheduler, tasks, locks/cache Redis, rodadas coordenadas
+
+---
 
 ## Fluxo principal
 
-1. `POST /api/v1/monitored/scrape` cadastra um produto monitorado e enfileira
-   `collector_task(product_id=...)`.
-2. `collector_task` chama `market_scraper`, atualiza o produto, grava
-   `price_history` e agenda a proxima coleta.
-3. Quando a coleta e de um produto monitorado, a task tambem enfileira a coleta
-   dos concorrentes e `comparison_task(monitored_id=...)`.
-4. `comparison_task` recalcula ranking, preco medio/minimo/maximo e status
-   competitivo.
-5. Apos a comparacao, `notifications` avalia variacao de preco/status e envia
-   alerta por `ntfy` e/ou `telert`, respeitando cooldown no Redis.
-6. `scheduler_task`, executada pelo Celery Beat a cada minuto, enfileira produtos
-   ativos com `next_check_at <= now`.
+```
+POST /api/v1/monitored/  (status=pending, next_check_at=now)
+  ↓
+collector_task(product_id)
+  ↓
+collect_product  →  market_scraper  →  PriceHistory + status=active
+  ↓
+rodada coordenada criada (collection_run:{product_id})
+  ↓
+collector_task(competitor_id, run_id=product_id)  ×N
+  ↓
+comparison_task(run_id=product_id)  — aguarda rodada concluir
+  ↓
+calculate_comparison  →  snapshot competitivo
+  ↓
+evaluate_and_send  →  ntfy / telert (se delta >= threshold e fora do cooldown)
+```
 
-## Contratos atuais
+O `scheduler_task` dispara a cada minuto pelo Celery Beat e reenfileira
+`collector_task(product_id)` para cada produto elegível com `next_check_at <= now`.
 
-API publica principal:
+---
 
-- `POST /api/v1/monitored/scrape`
-- `GET /api/v1/monitored/`
-- `GET /api/v1/monitored/{product_id}`
-- `PATCH /api/v1/monitored/{product_id}/pause`
-- `PATCH /api/v1/monitored/{product_id}/resume`
-- `DELETE /api/v1/monitored/{product_id}`
-- `POST /api/v1/competitors/scrape`
-- `GET /api/v1/competitors/?monitored_id=...`
-- `DELETE /api/v1/competitors/{competitor_id}`
-- `GET /api/v1/comparisons/{monitored_id}`
-- `GET /api/v1/comparisons/{monitored_id}/history`
-- `GET /api/v1/price-history/{monitored_id}`
-- `GET /api/v1/price-history/competitor/{competitor_id}`
+## Operação de Coleta
 
-Contrato com `market_scraper`:
+### Estados operacionais
+
+| Status        | Significado                                   | Elegível para coleta?            |
+|---------------|-----------------------------------------------|----------------------------------|
+| `pending`     | Cadastrado, aguardando primeira coleta        | Sim                              |
+| `active`      | Última coleta bem-sucedida                    | Sim                              |
+| `unavailable` | Produto reconhecido, mas indisponível         | Sim (continua sendo monitorado)  |
+| `error`       | Última coleta falhou com erro recuperável     | Sim (via `next_check_at`)        |
+| `paused`      | Suspenso manualmente                          | Não                              |
+| `unsupported` | Marketplace não suportado ou URL inválida     | Não                              |
+
+### Tipos de coleta
+
+| Tipo             | Gatilho                               | Escopo                              |
+|------------------|---------------------------------------|-------------------------------------|
+| Inicial          | `POST /api/v1/monitored/`             | Produto principal                   |
+| Recorrente       | `scheduler_task` (Beat, 1 min)        | Produto + concorrentes elegíveis    |
+| Concorrente novo | `POST /api/v1/monitored/{id}/competitors` | Concorrente individualmente     |
+| Recuperação      | Retry Celery / próximo ciclo Beat     | Item que falhou anteriormente       |
+
+### Rodada coordenada
+
+Quando um produto monitorado é coletado com sucesso e possui concorrentes
+elegíveis, o sistema cria uma **rodada coordenada** em Redis:
+
+```
+collection_run:{product_id}  →  Hash { competitor_id: "pending" | "done" }
+TTL: COLLECTION_RUN_TIMEOUT_SECONDS (padrão 300 s)
+```
+
+Cada `collector_task(competitor_id, run_id=...)` marca sua conclusão via
+`mark_done`. A `comparison_task` espera que todos os concorrentes estejam
+`"done"` (retenta a cada 15 s) antes de calcular o snapshot competitivo.
+Se o TTL expirar antes de todos terminarem, a comparação prossegue com os
+dados disponíveis — garantia de progresso mesmo com falhas parciais.
+
+### Agendamento adaptativo
+
+O intervalo entre coletas (`check_interval_minutes`) se ajusta automaticamente:
+
+| Condição                               | Novo intervalo                                       |
+|----------------------------------------|------------------------------------------------------|
+| Preço mudou                            | `max(MIN, atual // 2)` — aumenta frequência          |
+| Preço estável por N tentativas         | `min(MAX, atual × 2)` — reduz frequência             |
+| Demais                                 | Mantém intervalo atual                               |
+
+`next_check_at` aplica jitter de ±20 % sobre o intervalo para evitar
+thundering herd entre produtos com intervalos similares.
+
+Parâmetros relevantes: `MIN_CHECK_INTERVAL_MINUTES`, `MAX_CHECK_INTERVAL_MINUTES`,
+`CONSECUTIVE_UNCHANGED_THRESHOLD`.
+
+### Classificação de erros do scraper
+
+Todos os erros do `market_scraper` passam por `classify_scraper_error`
+em `app/infra/scraper_errors.py`:
+
+| `error_code`              | Status resultante | Ação                  | Domain cooldown? |
+|---------------------------|-------------------|-----------------------|------------------|
+| `CAPTCHA_DETECTED`        | `error`           | `retry_with_backoff`  | Sim              |
+| `BLOCKED`                 | `error`           | `retry_with_backoff`  | Sim              |
+| `TIMEOUT`                 | `error`           | `retry_with_backoff`  | Não              |
+| `PRICE_NOT_FOUND`         | `error`           | `retry_later`         | Não              |
+| `LAYOUT_CHANGED`          | `error`           | `retry_later`         | Não              |
+| `REDIRECT`                | `error`           | `retry_later`         | Não              |
+| `UNAVAILABLE`             | `unavailable`     | `retry_later`         | Não              |
+| `MARKETPLACE_NOT_SUPPORTED` | `unsupported`   | `no_retry`            | Não              |
+
+Para erros com `domain_cooldown=True`, o domínio fica bloqueado por
+`DOMAIN_CAPTCHA_COOLDOWN_SECONDS` antes da próxima tentativa.
+
+Para erros com status `error`, o `next_check_at` recebe um backoff de
+`COLLECTION_RETRY_BASE_DELAY_MINUTES × tentativa` (cap em
+`COLLECTION_RETRY_MAX_DELAY_MINUTES`), servindo de fallback caso todos
+os retries Celery se esgotem.
+
+---
+
+## Contratos
+
+### API pública
+
+| Método | Endpoint                                      | Descrição                            |
+|--------|-----------------------------------------------|--------------------------------------|
+| POST   | `/api/v1/monitored/`                          | Cadastrar produto monitorado         |
+| GET    | `/api/v1/monitored/`                          | Listar produtos                      |
+| GET    | `/api/v1/monitored/{id}`                      | Detalhe + última comparação          |
+| PATCH  | `/api/v1/monitored/{id}/pause`                | Pausar monitoramento                 |
+| PATCH  | `/api/v1/monitored/{id}/resume`               | Retomar monitoramento                |
+| DELETE | `/api/v1/monitored/{id}`                      | Remover produto                      |
+| POST   | `/api/v1/monitored/{id}/competitors`          | Adicionar concorrente                |
+| GET    | `/api/v1/monitored/{id}/competitors`          | Listar concorrentes                  |
+| DELETE | `/api/v1/competitors/{id}`                    | Remover concorrente                  |
+| GET    | `/api/v1/comparisons/{id}`                    | Última comparação                    |
+| GET    | `/api/v1/comparisons/{id}/history`            | Histórico de comparações             |
+| GET    | `/api/v1/price-history/{id}`                  | Histórico de preços (produto)        |
+| GET    | `/api/v1/price-history/competitor/{id}`       | Histórico de preços (concorrente)    |
+
+### Contrato com `market_scraper`
 
 - Request: `POST {SCRAPER_URL}/scraper/parse` com `{"url": "<produto>"}`.
-- Sucesso `200`: retorna marketplace, preco, disponibilidade e metadados de coleta.
-- Erro semantico `422`: retorna `error_code`, `marketplace`, `url`,
-  `retryable` e `message`.
-- Erros de conexao, timeout ou HTTP inesperado sao tratados como scraper
-  indisponivel e podem ser retentados pelo worker.
+- Sucesso `200`: retorna `marketplace`, `price`, `available`, `title`, `collected_at` e metadados.
+- Erro semântico `422`: retorna `error_code`, `marketplace`, `url`, `retryable` e `message`.
+- Conexão recusada / timeout / HTTP inesperado → `ScraperUnavailableError` → retry automático.
 
-Tasks internas:
+### Tasks Celery internas
 
-- `collector_task(product_id=None, competitor_id=None)`: aceita exatamente um
-  identificador e executa uma coleta.
-- `comparison_task(monitored_id, old_price=None, new_price=None, old_status=None)`:
-  recalcula comparacao e avalia notificacoes.
-- `scheduler_task()`: consulta produtos ativos vencidos e enfileira coletas.
+```python
+collector_task(
+    product_id: str | None = None,
+    competitor_id: str | None = None,
+    run_id: str | None = None,      # product_id da rodada, se parte de coleta coordenada
+)
 
-## Validacao operacional
+comparison_task(
+    monitored_id: str,
+    old_price: str | None = None,   # Decimal serializado, para avaliação de notificação
+    new_price: str | None = None,
+    run_id: str | None = None,      # aguarda rodada coordenada antes de calcular
+)
 
-Com as dependencias instaladas, a verificacao minima antes de refatorar e:
+scheduler_task()                    # dispara pelo Beat a cada 1 minuto
+```
+
+---
+
+## Parâmetros de configuração relevantes (`.env`)
+
+| Variável                              | Padrão | Descrição                                               |
+|---------------------------------------|--------|---------------------------------------------------------|
+| `MIN_CHECK_INTERVAL_MINUTES`          | `30`   | Intervalo mínimo entre coletas (minutos)                |
+| `MAX_CHECK_INTERVAL_MINUTES`          | `240`  | Intervalo máximo entre coletas (minutos)                |
+| `CONSECUTIVE_UNCHANGED_THRESHOLD`     | `3`    | Coletas sem variação para ampliar intervalo             |
+| `COLLECTION_RETRY_BASE_DELAY_MINUTES` | `5`    | Base de backoff após erro (multiplicado pela tentativa) |
+| `COLLECTION_RETRY_MAX_DELAY_MINUTES`  | `60`   | Cap máximo do backoff (minutos)                         |
+| `COLLECTION_RUN_TIMEOUT_SECONDS`      | `300`  | SLA máximo de uma rodada coordenada (segundos)          |
+| `DOMAIN_CAPTCHA_COOLDOWN_SECONDS`     | `300`  | Cooldown de domínio após CAPTCHA ou bloqueio            |
+| `NOTIFICATION_DELTA_PERCENT`          | `5.0`  | Variação mínima (%) para disparar alerta                |
+| `NOTIFICATION_COOLDOWN_MINUTES`       | `30`   | Cooldown entre alertas do mesmo produto                 |
+
+---
+
+## Validação operacional
 
 ```powershell
-cd market_alert
+# Dentro de market_alert/
 python -c "import app.main; import app.workers.tasks"
 pytest
 alembic upgrade head
@@ -92,5 +211,5 @@ Com Docker:
 docker compose up --build
 ```
 
-Validar `http://localhost:8000/health`, `http://localhost:8000/docs`,
-PostgreSQL, Redis, workers Celery e comunicacao com `market_scraper`.
+Validar: `http://localhost:8000/health`, `http://localhost:8000/docs`,
+PostgreSQL, Redis, workers Celery e comunicação com `market_scraper`.

@@ -1,5 +1,7 @@
+import time
 import uuid
 from datetime import datetime, timezone
+from decimal import Decimal
 from urllib.parse import urlparse
 
 import structlog
@@ -9,7 +11,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infra.clients.scraper import ScraperClient, ScraperParseError, ScraperUnavailableError
-from app.infra.scraper_errors import ERROS_BLOQUEIO, ERROS_NAO_SUPORTADO
+from app.infra.scraper_errors import classify_scraper_error
 from app.products.competitor.competitor_model import Competitor
 from app.products.monitored.monitored_model import MonitoredProduct
 from app.products.price_history.price_model import PriceHistory
@@ -97,86 +99,158 @@ async def collect_competitor(
     redis: Redis,
     scraper: ScraperClient,
     competitor: Competitor,
-) -> PriceHistory | None:
+) -> dict:
+    """Coleta preço do concorrente.
+
+    Returns:
+        dict com chave "success" (bool) e campos adicionais por resultado.
+    Raises:
+        ScraperUnavailableError: scraper inacessível — Celery deve retentar.
+        ScraperParseError: erro retryable do scraper — Celery deve retentar.
+    """
+    inicio = time.monotonic()
+
+    if competitor.status in ("paused", "unsupported"):
+        logger.info("coleta_ignorada_status", concorrente_id=str(competitor.id), status=competitor.status)
+        return {"success": False, "reason": "ineligible_status"}
+
     chave_lock = f"lock:collect:{competitor.id}"
-    if not acquire_lock(redis, chave_lock):
+    if not acquire_lock(redis, chave_lock, timeout=300):
         logger.info("coleta_pulada_lock_ativo", concorrente_id=str(competitor.id))
-        return None
+        return {"success": False, "reason": "lock_busy"}
+
+    logger.info("lock_adquirido_concorrente", concorrente_id=str(competitor.id))
 
     try:
         dominio = urlparse(competitor.url_original).netloc
         if not check_rate_limit(redis, dominio):
             logger.info("coleta_rate_limited", dominio=dominio, concorrente_id=str(competitor.id))
-            return None
+            return {"success": False, "reason": "rate_limited"}
+
+        logger.info(
+            "iniciando_coleta_concorrente",
+            concorrente_id=str(competitor.id),
+            url=competitor.url_original,
+        )
 
         try:
             resultado = await scraper.parse(competitor.url_original)
         except ScraperUnavailableError as exc:
+            now = datetime.now(timezone.utc)
             logger.warning("scraper_indisponivel_concorrente", concorrente_id=str(competitor.id), erro=str(exc))
             competitor.status = "error"
-            competitor.last_checked_at = datetime.now(timezone.utc)
+            competitor.last_checked_at = now
             await session.commit()
             raise
         except ScraperParseError as exc:
             error_code = exc.error_result.error_code
+            cls = classify_scraper_error(error_code)
+            now = datetime.now(timezone.utc)
+
             logger.warning(
                 "scraper_erro_semantico_concorrente",
                 concorrente_id=str(competitor.id),
                 error_code=error_code,
-                retryable=exc.error_result.retryable,
+                status_resultante=cls.status,
+                acao=cls.action,
+                domain_cooldown=cls.domain_cooldown,
             )
-            if error_code == "UNAVAILABLE":
+
+            if cls.domain_cooldown:
+                set_domain_cooldown(redis, dominio)
+
+            competitor.last_checked_at = now
+
+            if cls.status == "unavailable":
                 competitor.status = "unavailable"
                 competitor.is_available = False
-                competitor.last_checked_at = datetime.now(timezone.utc)
                 await session.commit()
-                return None
-            if error_code in ERROS_NAO_SUPORTADO:
+                return {"success": False, "reason": "unavailable", "retryable": False}
+
+            if cls.status == "unsupported":
                 competitor.status = "unsupported"
-                competitor.last_checked_at = datetime.now(timezone.utc)
                 await session.commit()
-                return None
-            if error_code in ERROS_BLOQUEIO:
-                set_domain_cooldown(redis, dominio)
+                return {"success": False, "reason": "unsupported", "retryable": False}
+
+            # status == "error" — re-raise para Celery retry
             competitor.status = "error"
-            competitor.last_checked_at = datetime.now(timezone.utc)
             await session.commit()
             raise
 
-        historico = PriceHistory(
-            competitor_id=competitor.id,
-            price=resultado.price,
-            is_available=resultado.available,
-            title=resultado.title,
-            seller=resultado.seller,
-            currency=resultado.currency,
-            extraction_method=resultado.extraction_method,
-            confidence=resultado.confidence,
-            thumbnail_url=resultado.thumbnail_url,
-            canonical_url=resultado.canonical_url,
-            product_id=resultado.product_id,
-        )
-        session.add(historico)
+        # ── Sucesso do scraper ──────────────────────────────────────────────────
+        now = datetime.now(timezone.utc)
+        novo_preco = resultado.price
 
-        competitor.status = "active"
-        competitor.current_price = float(resultado.price)
-        competitor.is_available = resultado.available
-        competitor.last_checked_at = datetime.now(timezone.utc)
+        if resultado.available and novo_preco is not None and novo_preco > 0:
+            historico = PriceHistory(
+                competitor_id=competitor.id,
+                price=novo_preco,
+                is_available=True,
+                title=resultado.title,
+                seller=resultado.seller,
+                currency=resultado.currency,
+                extraction_method=resultado.extraction_method,
+                confidence=resultado.confidence,
+                thumbnail_url=resultado.thumbnail_url,
+                canonical_url=resultado.canonical_url,
+                product_id=resultado.product_id,
+            )
+            session.add(historico)
 
-        if resultado.title and not competitor.name:
-            competitor.name = resultado.title
+            competitor.status = "active"
+            competitor.current_price = float(novo_preco)
+            competitor.is_available = True
+            competitor.last_checked_at = now
 
-        await session.commit()
-        await session.refresh(historico)
+            if resultado.title and not competitor.name:
+                competitor.name = resultado.title
 
-        logger.info(
-            "concorrente_coletado",
-            concorrente_id=str(competitor.id),
-            preco=str(resultado.price),
-            extraction_method=resultado.extraction_method,
-            confidence=resultado.confidence,
-        )
-        return historico
+            await session.commit()
+            await session.refresh(historico)
+
+            logger.info(
+                "concorrente_coletado",
+                concorrente_id=str(competitor.id),
+                preco=str(novo_preco),
+                extraction_method=resultado.extraction_method,
+                confidence=resultado.confidence,
+                duracao_s=round(time.monotonic() - inicio, 2),
+            )
+            return {"success": True, "price": float(novo_preco)}
+
+        else:
+            # Concorrente indisponível — registra histórico com último preço conhecido
+            preco_historico = novo_preco if novo_preco is not None else (
+                Decimal(str(competitor.current_price)) if competitor.current_price is not None else None
+            )
+            if preco_historico is not None:
+                historico = PriceHistory(
+                    competitor_id=competitor.id,
+                    price=preco_historico,
+                    is_available=False,
+                    title=resultado.title,
+                    extraction_method=resultado.extraction_method,
+                    confidence=resultado.confidence,
+                )
+                session.add(historico)
+
+            competitor.status = "unavailable"
+            competitor.is_available = False
+            competitor.last_checked_at = now
+
+            await session.commit()
+
+            logger.info(
+                "concorrente_indisponivel",
+                concorrente_id=str(competitor.id),
+                duracao_s=round(time.monotonic() - inicio, 2),
+            )
+            return {"success": False, "reason": "unavailable"}
 
     finally:
         release_lock(redis, chave_lock)
+        logger.debug(
+            "lock_liberado_concorrente",
+            concorrente_id=str(competitor.id),
+            duracao_s=round(time.monotonic() - inicio, 2),
+        )

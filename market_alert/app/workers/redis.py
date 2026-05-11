@@ -17,8 +17,8 @@ def get_redis() -> Redis:
 
 # ── Locks distribuídos ─────────────────────────────────────────────────────────
 
-def acquire_lock(redis: Redis, key: str) -> bool:
-    return bool(redis.set(key, "1", nx=True, ex=_LOCK_TTL))
+def acquire_lock(redis: Redis, key: str, timeout: int = _LOCK_TTL) -> bool:
+    return bool(redis.set(key, "1", nx=True, ex=timeout))
 
 
 def release_lock(redis: Redis, key: str) -> None:

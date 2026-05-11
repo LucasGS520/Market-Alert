@@ -18,7 +18,8 @@ class MonitoredProductRead(BaseModel):
 
     id: uuid.UUID
     name: str | None
-    url: str
+    url_original: str
+    url_normalized: str
     status: str
     current_price: Decimal | None
     is_available: bool | None
@@ -33,4 +34,4 @@ class MonitoredProductDetail(MonitoredProductRead):
 
 
 class MonitoredProductPatch(BaseModel):
-    status: Literal["active", "paused"]
+    status: Literal["pending", "active", "paused", "error", "unsupported", "unavailable"]

@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infra.clients.scraper import ScraperClient, ScraperParseError, ScraperUnavailableError
-from app.infra.scraper_errors import ERROS_BLOQUEIO
+from app.infra.scraper_errors import ERROS_BLOQUEIO, ERROS_NAO_SUPORTADO
 from app.products.monitored.monitored_model import MonitoredProduct
 from app.products.price_history.price_model import PriceHistory
 from app.workers.redis import acquire_lock, check_rate_limit, release_lock, set_domain_cooldown
@@ -40,11 +40,22 @@ async def list_products(session: AsyncSession) -> list[MonitoredProduct]:
 
 
 async def create_product(session: AsyncSession, url: str, name: str | None) -> MonitoredProduct:
-    existente = await session.scalar(select(MonitoredProduct).where(MonitoredProduct.url == url))
+    from app.products.url_utils import normalize_url
+
+    url_normalized = normalize_url(url)
+    existente = await session.scalar(
+        select(MonitoredProduct).where(MonitoredProduct.url_normalized == url_normalized)
+    )
     if existente:
         raise HTTPException(status_code=409, detail="Esta URL já está sendo monitorada")
 
-    produto = MonitoredProduct(url=url, name=name)
+    produto = MonitoredProduct(
+        url_original=url,
+        url_normalized=url_normalized,
+        name=name,
+        status="pending",
+        next_check_at=datetime.now(timezone.utc),
+    )
     session.add(produto)
     await session.commit()
     await session.refresh(produto)
@@ -112,13 +123,13 @@ async def collect_product(
         return None
 
     try:
-        dominio = urlparse(product.url).netloc
+        dominio = urlparse(product.url_original).netloc
         if not check_rate_limit(redis, dominio):
             logger.info("coleta_rate_limited", dominio=dominio, produto_id=str(product.id))
             return None
 
         try:
-            resultado = await scraper.parse(product.url)
+            resultado = await scraper.parse(product.url_original)
         except ScraperUnavailableError as exc:
             logger.warning("scraper_indisponivel", produto_id=str(product.id), erro=str(exc))
             product.status = "error"
@@ -134,6 +145,7 @@ async def collect_product(
                 marketplace=exc.error_result.marketplace,
             )
             if error_code == "UNAVAILABLE":
+                product.status = "unavailable"
                 product.is_available = False
                 product.last_checked_at = datetime.now(timezone.utc)
                 proximo_intervalo = compute_next_interval(
@@ -143,6 +155,11 @@ async def collect_product(
                 )
                 product.check_interval_minutes = proximo_intervalo
                 product.next_check_at = datetime.now(timezone.utc) + timedelta(minutes=proximo_intervalo)
+                await session.commit()
+                return None
+            if error_code in ERROS_NAO_SUPORTADO:
+                product.status = "unsupported"
+                product.last_checked_at = datetime.now(timezone.utc)
                 await session.commit()
                 return None
             if error_code in ERROS_BLOQUEIO:

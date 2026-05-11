@@ -124,8 +124,11 @@ def collector_task(
                     logger.warning("concorrente_nao_encontrado", concorrente_id=competitor_id)
                     return
 
+                monitored_id_str = str(concorrente.monitored_id)
+
+                resultado = None
                 try:
-                    await collect_competitor(session, redis, scraper, concorrente)
+                    resultado = await collect_competitor(session, redis, scraper, concorrente)
                 except ScraperUnavailableError as exc:
                     raise self.retry(exc=exc)
                 except ScraperParseError as exc:
@@ -136,6 +139,10 @@ def collector_task(
                         concorrente_id=competitor_id,
                         error_code=exc.error_result.error_code,
                     )
+                    return
+
+                if resultado is not None:
+                    comparison_task.delay(monitored_id=monitored_id_str)
 
     asyncio.run(_executar())
 
@@ -197,8 +204,8 @@ def scheduler_task() -> None:
     Verifica quais produtos estão prontos para coleta e os enfileira.
 
     Rodado pelo Celery Beat a cada 1 minuto. Consulta produtos com
-    status='active' e next_check_at <= agora, enfileirando uma
-    collector_task para cada um.
+    status 'active' ou 'pending' e next_check_at <= agora, enfileirando
+    uma collector_task para cada um.
     """
     from datetime import datetime, timezone
 
@@ -210,7 +217,7 @@ def scheduler_task() -> None:
             resultado = await session.execute(
                 select(MonitoredProduct).where(
                     and_(
-                        MonitoredProduct.status == "active",
+                        MonitoredProduct.status.in_(["active", "pending"]),
                         MonitoredProduct.next_check_at <= agora,
                     )
                 )

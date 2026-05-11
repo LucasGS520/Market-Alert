@@ -1,25 +1,32 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, Integer, Numeric, String, func, text
+from sqlalchemy import Boolean, DateTime, Enum, Integer, Numeric, String, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.infra.database import Base
 
-ProductStatus = Enum("active", "paused", "error", name="product_status")
+ProductStatus = Enum(
+    "pending", "active", "paused", "error", "unsupported", "unavailable",
+    name="product_status",
+)
 
 
 class MonitoredProduct(Base):
     __tablename__ = "monitored_products"
+    __table_args__ = (
+        UniqueConstraint("url_normalized", name="uq_monitored_url_normalized"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
     )
     name: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    url: Mapped[str] = mapped_column(String(2048), unique=True, nullable=False)
+    url_original: Mapped[str] = mapped_column(String(2048), nullable=False)
+    url_normalized: Mapped[str] = mapped_column(String(2048), nullable=False)
 
-    status: Mapped[str] = mapped_column(ProductStatus, nullable=False, server_default="active")
+    status: Mapped[str] = mapped_column(ProductStatus, nullable=False, server_default="pending")
     current_price: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
     is_available: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
 

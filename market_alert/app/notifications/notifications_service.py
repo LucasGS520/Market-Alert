@@ -50,16 +50,16 @@ async def evaluate_and_send(
     if not evento:
         return
 
-    nome_produto = product.name or product.url
+    nome_produto = product.name or product.url_original
     if evento == "price_drop":
         titulo = f"Queda de preço — {nome_produto}"
-        mensagem = f"Preço caiu de R$ {old_price:.2f} para R$ {new_price:.2f}\n{product.url}"
+        mensagem = f"Preço caiu de R$ {old_price:.2f} para R$ {new_price:.2f}\n{product.url_original}"
     elif evento == "price_rise":
         titulo = f"Alta de preço — {nome_produto}"
-        mensagem = f"Preço subiu de R$ {old_price:.2f} para R$ {new_price:.2f}\n{product.url}"
+        mensagem = f"Preço subiu de R$ {old_price:.2f} para R$ {new_price:.2f}\n{product.url_original}"
     else:
         titulo = f"Mudança de status — {nome_produto}"
-        mensagem = f"Status mudou de '{old_status}' para '{new_status}'\n{product.url}"
+        mensagem = f"Status mudou de '{old_status}' para '{new_status}'\n{product.url_original}"
 
     tarefas: list[tuple[str, object]] = []
 

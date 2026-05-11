@@ -6,7 +6,6 @@ from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field
 
 
 class CompetitorCreate(BaseModel):
-    monitored_id: uuid.UUID
     url: AnyHttpUrl
     name: str | None = Field(None, max_length=512)
 
@@ -16,8 +15,10 @@ class CompetitorRead(BaseModel):
 
     id: uuid.UUID
     monitored_id: uuid.UUID
-    url: str
+    url_original: str
+    url_normalized: str
     name: str | None
+    status: str
     current_price: Decimal | None
     is_available: bool | None
     last_checked_at: datetime | None

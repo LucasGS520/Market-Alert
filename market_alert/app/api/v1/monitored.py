@@ -7,6 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infra.database import get_session
 from app.comparison.comparison_schemas import ComparisonRead
+from app.products.competitor.competitor_schemas import CompetitorCreate, CompetitorRead
+from app.products.competitor.competitor_service import create_competitor, list_competitors
 from app.products.monitored.monitored_model import MonitoredProduct
 from app.products.monitored.monitored_schemas import (
     MonitoredProductCreate,
@@ -29,8 +31,8 @@ router = APIRouter(prefix="/monitored", tags=["monitored"])
 Session = Annotated[AsyncSession, Depends(get_session)]
 
 
-@router.post("/scrape", response_model=MonitoredProductRead, status_code=status.HTTP_202_ACCEPTED)
-async def create_and_scrape(body: MonitoredProductCreate, session: Session) -> MonitoredProduct:
+@router.post("/", response_model=MonitoredProductRead, status_code=status.HTTP_202_ACCEPTED)
+async def create_monitored(body: MonitoredProductCreate, session: Session) -> MonitoredProduct:
     produto = await create_product(session, str(body.url), body.name)
 
     try:
@@ -72,3 +74,35 @@ async def resume_monitored(product_id: uuid.UUID, session: Session) -> Monitored
 async def delete_monitored(product_id: uuid.UUID, session: Session) -> Response:
     await delete_product(session, product_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# ── Concorrentes aninhados ──────────────────────────────────────────────────────
+
+@router.post(
+    "/{monitored_id}/competitors",
+    response_model=CompetitorRead,
+    status_code=status.HTTP_202_ACCEPTED,
+    tags=["competitors"],
+)
+async def add_competitor(
+    monitored_id: uuid.UUID, body: CompetitorCreate, session: Session
+):
+    concorrente = await create_competitor(session, monitored_id, str(body.url), body.name)
+
+    try:
+        from app.workers.tasks import collector_task
+        tarefa = collector_task.delay(competitor_id=str(concorrente.id))
+        logger.info("coleta_concorrente_enfileirada", concorrente_id=str(concorrente.id), tarefa_id=tarefa.id)
+    except Exception as exc:
+        logger.warning("enfileiramento_falhou", concorrente_id=str(concorrente.id), erro=str(exc))
+
+    return concorrente
+
+
+@router.get(
+    "/{monitored_id}/competitors",
+    response_model=list[CompetitorRead],
+    tags=["competitors"],
+)
+async def list_monitored_competitors(monitored_id: uuid.UUID, session: Session):
+    return await list_competitors(session, monitored_id)

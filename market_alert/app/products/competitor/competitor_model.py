@@ -11,7 +11,7 @@ from app.infra.database import Base
 class Competitor(Base):
     __tablename__ = "competitors"
     __table_args__ = (
-        UniqueConstraint("monitored_id", "url", name="uq_competitor_monitored_url"),
+        UniqueConstraint("monitored_id", "url_normalized", name="uq_competitor_monitored_url_normalized"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -20,13 +20,14 @@ class Competitor(Base):
     monitored_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("monitored_products.id", ondelete="CASCADE"), nullable=False
     )
-    url: Mapped[str] = mapped_column(String(2048), nullable=False)
+    url_original: Mapped[str] = mapped_column(String(2048), nullable=False)
+    url_normalized: Mapped[str] = mapped_column(String(2048), nullable=False)
     name: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
     status: Mapped[str] = mapped_column(
-        Enum("active", "paused", "error", name="product_status", create_constraint=False),
+        Enum("pending", "active", "paused", "error", "unsupported", "unavailable", name="product_status", create_constraint=False),
         nullable=False,
-        server_default="active",
+        server_default="pending",
     )
     current_price: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
     is_available: Mapped[bool | None] = mapped_column(Boolean, nullable=True)

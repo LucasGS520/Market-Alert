@@ -10,29 +10,34 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infra.clients.scraper import ScraperClient, ScraperParseError, ScraperUnavailableError
+from app.infra.scraper_errors import ERROS_BLOQUEIO
 from app.products.monitored.monitored_model import MonitoredProduct
 from app.products.price_history.price_model import PriceHistory
 from app.workers.redis import acquire_lock, check_rate_limit, release_lock, set_domain_cooldown
 
 logger = structlog.get_logger()
 
-_ERROS_BLOQUEIO = {"CAPTCHA_DETECTED", "BLOCKED"}
-
 # ── Scheduling ─────────────────────────────────────────────────────────────────
-
-_INTERVALO_MINIMO = 15
-_INTERVALO_MAXIMO = 240
 
 
 def compute_next_interval(current_interval: int, price_changed: bool, consecutive_unchanged: int) -> int:
+    from app.infra.config import settings
+
     if price_changed:
-        return max(max(_INTERVALO_MINIMO, current_interval // 2), 30)
-    if consecutive_unchanged >= 3:
-        return min(_INTERVALO_MAXIMO, current_interval * 2)
+        return max(settings.min_check_interval_minutes, current_interval // 2)
+    if consecutive_unchanged >= settings.consecutive_unchanged_threshold:
+        return min(settings.max_check_interval_minutes, current_interval * 2)
     return current_interval
 
 
 # ── CRUD ────────────────────────────────────────────────────────────────────────
+
+async def list_products(session: AsyncSession) -> list[MonitoredProduct]:
+    resultado = await session.execute(
+        select(MonitoredProduct).order_by(MonitoredProduct.created_at.desc())
+    )
+    return list(resultado.scalars().all())
+
 
 async def create_product(session: AsyncSession, url: str, name: str | None) -> MonitoredProduct:
     existente = await session.scalar(select(MonitoredProduct).where(MonitoredProduct.url == url))
@@ -140,7 +145,7 @@ async def collect_product(
                 product.next_check_at = datetime.now(timezone.utc) + timedelta(minutes=proximo_intervalo)
                 await session.commit()
                 return None
-            if error_code in _ERROS_BLOQUEIO:
+            if error_code in ERROS_BLOQUEIO:
                 set_domain_cooldown(redis, dominio)
             product.status = "error"
             await session.commit()

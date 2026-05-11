@@ -9,15 +9,13 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infra.clients.scraper import ScraperClient, ScraperParseError, ScraperUnavailableError
+from app.infra.scraper_errors import ERROS_BLOQUEIO
 from app.products.competitor.competitor_model import Competitor
 from app.products.monitored.monitored_model import MonitoredProduct
 from app.products.price_history.price_model import PriceHistory
 from app.workers.redis import acquire_lock, check_rate_limit, release_lock, set_domain_cooldown
 
 logger = structlog.get_logger()
-
-_ERROS_BLOQUEIO = {"CAPTCHA_DETECTED", "BLOCKED"}
-MAX_COMPETITORS = 5
 
 
 # ── CRUD ────────────────────────────────────────────────────────────────────────
@@ -35,13 +33,15 @@ async def create_competitor(
             detail="A URL do concorrente não pode ser igual à URL do produto monitorado",
         )
 
+    from app.infra.config import settings
+
     total = await session.scalar(
         select(func.count()).where(Competitor.monitored_id == monitored_id)
     )
-    if total >= MAX_COMPETITORS:
+    if total >= settings.max_competitors_per_product:
         raise HTTPException(
             status_code=422,
-            detail=f"Máximo de {MAX_COMPETITORS} concorrentes por produto atingido",
+            detail=f"Máximo de {settings.max_competitors_per_product} concorrentes por produto atingido",
         )
 
     existente = await session.scalar(
@@ -58,6 +58,15 @@ async def create_competitor(
     await session.commit()
     await session.refresh(concorrente)
     return concorrente
+
+
+async def list_competitors(session: AsyncSession, monitored_id: uuid.UUID) -> list[Competitor]:
+    resultado = await session.execute(
+        select(Competitor)
+        .where(Competitor.monitored_id == monitored_id)
+        .order_by(Competitor.created_at)
+    )
+    return list(resultado.scalars().all())
 
 
 async def delete_competitor(session: AsyncSession, competitor_id: uuid.UUID) -> uuid.UUID:
@@ -95,6 +104,9 @@ async def collect_competitor(
             resultado = await scraper.parse(competitor.url)
         except ScraperUnavailableError as exc:
             logger.warning("scraper_indisponivel_concorrente", concorrente_id=str(competitor.id), erro=str(exc))
+            competitor.status = "error"
+            competitor.last_checked_at = datetime.now(timezone.utc)
+            await session.commit()
             raise
         except ScraperParseError as exc:
             error_code = exc.error_result.error_code
@@ -109,8 +121,11 @@ async def collect_competitor(
                 competitor.last_checked_at = datetime.now(timezone.utc)
                 await session.commit()
                 return None
-            if error_code in _ERROS_BLOQUEIO:
+            if error_code in ERROS_BLOQUEIO:
                 set_domain_cooldown(redis, dominio)
+            competitor.status = "error"
+            competitor.last_checked_at = datetime.now(timezone.utc)
+            await session.commit()
             raise
 
         historico = PriceHistory(

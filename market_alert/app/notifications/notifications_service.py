@@ -1,5 +1,4 @@
 import asyncio
-import uuid
 from decimal import Decimal
 
 import structlog
@@ -9,8 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.infra.config import settings
 from app.infra.clients.ntfy import send_ntfy
 from app.infra.clients.telert import send_telert
-from app.products.monitored.monitored_model import MonitoredProduct
 from app.notifications.notifications_model import NotificationLog
+from app.products.monitored.monitored_model import MonitoredProduct
 from app.workers.redis import is_in_cooldown, set_cooldown
 
 logger = structlog.get_logger()
@@ -62,23 +61,25 @@ async def evaluate_and_send(
         titulo = f"Mudança de status — {nome_produto}"
         mensagem = f"Status mudou de '{old_status}' para '{new_status}'\n{product.url}"
 
-    tarefas = []
-    canais_enviados = []
+    tarefas: list[tuple[str, object]] = []
 
     if settings.ntfy_topic:
-        tarefas.append(send_ntfy(settings.ntfy_url, settings.ntfy_topic, titulo, mensagem))
-        canais_enviados.append("ntfy")
+        tarefas.append(("ntfy", send_ntfy(settings.ntfy_url, settings.ntfy_topic, titulo, mensagem)))
 
     if settings.telert_token:
-        tarefas.append(send_telert(settings.telert_token, f"{titulo}\n{mensagem}"))
-        canais_enviados.append("telert")
+        tarefas.append(("telert", send_telert(settings.telert_token, f"{titulo}\n{mensagem}")))
 
-    if tarefas:
-        await asyncio.gather(*tarefas, return_exceptions=True)
+    if not tarefas:
+        return
+
+    resultados = await asyncio.gather(*[coro for _, coro in tarefas], return_exceptions=True)
 
     set_cooldown(redis, product.id)
 
-    for canal in canais_enviados:
+    for (canal, _), resultado in zip(tarefas, resultados):
+        if isinstance(resultado, Exception):
+            logger.warning("notificacao_falhou", canal=canal, produto_id=str(product.id), erro=str(resultado))
+            continue
         log = NotificationLog(
             monitored_id=product.id,
             event_type=evento,
@@ -86,6 +87,8 @@ async def evaluate_and_send(
             channel=canal,
         )
         session.add(log)
+
     await session.commit()
 
+    canais_enviados = [canal for canal, _ in tarefas]
     logger.info("notificacao_enviada", produto_id=str(product.id), evento=evento, canais=canais_enviados)

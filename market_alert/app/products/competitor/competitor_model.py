@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, String, UniqueConstraint, func, text
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Numeric, String, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -23,6 +23,11 @@ class Competitor(Base):
     url: Mapped[str] = mapped_column(String(2048), nullable=False)
     name: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
+    status: Mapped[str] = mapped_column(
+        Enum("active", "paused", "error", name="product_status", create_constraint=False),
+        nullable=False,
+        server_default="active",
+    )
     current_price: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
     is_available: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

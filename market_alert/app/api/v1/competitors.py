@@ -3,13 +3,11 @@ from typing import Annotated
 
 import structlog
 from fastapi import APIRouter, Depends, Response, status
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infra.database import get_session
-from app.products.competitor.competitor_model import Competitor
 from app.products.competitor.competitor_schemas import CompetitorCreate, CompetitorRead
-from app.products.competitor.competitor_service import create_competitor, delete_competitor
+from app.products.competitor.competitor_service import create_competitor, delete_competitor, list_competitors
 
 logger = structlog.get_logger()
 
@@ -19,7 +17,7 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 
 
 @router.post("/scrape", response_model=CompetitorRead, status_code=status.HTTP_202_ACCEPTED)
-async def add_competitor(body: CompetitorCreate, session: Session) -> Competitor:
+async def add_competitor(body: CompetitorCreate, session: Session):
     concorrente = await create_competitor(session, body.monitored_id, str(body.url), body.name)
 
     try:
@@ -33,13 +31,8 @@ async def add_competitor(body: CompetitorCreate, session: Session) -> Competitor
 
 
 @router.get("/", response_model=list[CompetitorRead])
-async def list_competitors(monitored_id: uuid.UUID, session: Session) -> list[Competitor]:
-    resultado = await session.execute(
-        select(Competitor)
-        .where(Competitor.monitored_id == monitored_id)
-        .order_by(Competitor.created_at)
-    )
-    return list(resultado.scalars().all())
+async def list_competitors_endpoint(monitored_id: uuid.UUID, session: Session):
+    return await list_competitors(session, monitored_id)
 
 
 @router.delete("/{competitor_id}", status_code=status.HTTP_204_NO_CONTENT)

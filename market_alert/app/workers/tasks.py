@@ -114,7 +114,6 @@ def collector_task(
                     monitored_id=product_id,
                     old_price=str(preco_anterior) if preco_anterior else None,
                     new_price=str(preco_novo) if preco_novo else None,
-                    old_status=None,  # o comparison_task determinará o status atual
                 )
 
             elif competitor_id:
@@ -147,7 +146,6 @@ def comparison_task(
     monitored_id: str,
     old_price: str | None = None,
     new_price: str | None = None,
-    old_status: str | None = None,
 ) -> None:
     """
     Recalcula a comparação de preços e avalia notificações.
@@ -156,21 +154,28 @@ def comparison_task(
         monitored_id: UUID do MonitoredProduct.
         old_price:    Preço antes da coleta (string Decimal), para detectar variação.
         new_price:    Preço após a coleta (string Decimal).
-        old_status:   Status competitivo anterior, para detectar mudança de status.
     """
     redis = get_redis()
 
     async def _executar():
         async with AsyncSessionLocal() as session:
+            from app.comparison.comparison_model import Comparison
+            from app.notifications.notifications_service import evaluate_and_send
+
             mid = uuid.UUID(monitored_id)
 
-            # Calcula e persiste a nova comparação
+            # Consulta o status competitivo anterior antes de recalcular
+            comparacao_anterior = await session.scalar(
+                select(Comparison)
+                .where(Comparison.monitored_id == mid)
+                .order_by(Comparison.calculated_at.desc())
+                .limit(1)
+            )
+            status_anterior = comparacao_anterior.status if comparacao_anterior else None
+
             comparacao = await calculate_comparison(session, redis, mid)
 
             if comparacao:
-                # Avalia se deve enviar notificação com base na variação de preço/status
-                from app.notifications.notifications_service import evaluate_and_send
-
                 produto = await session.get(MonitoredProduct, mid)
                 if produto:
                     await evaluate_and_send(
@@ -179,7 +184,7 @@ def comparison_task(
                         product=produto,
                         old_price=Decimal(old_price) if old_price else None,
                         new_price=Decimal(new_price) if new_price else None,
-                        old_status=old_status,
+                        old_status=status_anterior,
                         new_status=comparacao.status,
                     )
 

@@ -3,7 +3,6 @@ from typing import Annotated
 
 import structlog
 from fastapi import APIRouter, Depends, Response, status
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infra.database import get_session
@@ -18,6 +17,7 @@ from app.products.monitored.monitored_service import (
     create_product,
     delete_product,
     get_with_latest_comparison,
+    list_products,
     pause_product,
     resume_product,
 )
@@ -44,11 +44,8 @@ async def create_and_scrape(body: MonitoredProductCreate, session: Session) -> M
 
 
 @router.get("/", response_model=list[MonitoredProductRead])
-async def list_monitored(session: Session) -> list[MonitoredProduct]:
-    resultado = await session.execute(
-        select(MonitoredProduct).order_by(MonitoredProduct.created_at.desc())
-    )
-    return list(resultado.scalars().all())
+async def list_monitored(session: Session):
+    return await list_products(session)
 
 
 @router.get("/{product_id}", response_model=MonitoredProductDetail)

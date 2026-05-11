@@ -23,6 +23,18 @@ class Settings(BaseSettings):
     notification_delta_percent: float = 5.0
     notification_cooldown_minutes: int = 30
 
+    # ── Regras de Comparação ───────────────────────────────────────────────
+    status_threshold_competitive: float = 5.0   # % acima do mínimo → ainda "competitive"
+    status_threshold_attention: float = 15.0    # % acima do mínimo → "attention" (acima → "urgent")
+
+    # ── Concorrentes ───────────────────────────────────────────────────────
+    max_competitors_per_product: int = 5
+
+    # ── Intervalos de Agendamento ──────────────────────────────────────────
+    min_check_interval_minutes: int = 30
+    max_check_interval_minutes: int = 240
+    consecutive_unchanged_threshold: int = 3
+
     # ── Rate Limiting de Domínio ───────────────────────────────────────────
     domain_captcha_cooldown_seconds: int = 300
 

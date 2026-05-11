@@ -41,9 +41,15 @@ async def evaluate_and_send(
     new_price: Decimal | None,
     old_status: str | None,
     new_status: str | None,
+    run_status: str | None = None,
+    participants_count: int | None = None,
 ) -> None:
     if is_in_cooldown(redis, product.id):
-        logger.debug("notificacao_cooldown_ativo", produto_id=str(product.id))
+        logger.debug(
+            "notificacao_cooldown_ativo",
+            produto_id=str(product.id),
+            run_status=run_status,
+        )
         return
 
     evento = _detectar_evento(old_price, new_price, old_status, new_status, settings.notification_delta_percent)
@@ -91,4 +97,11 @@ async def evaluate_and_send(
     await session.commit()
 
     canais_enviados = [canal for canal, _ in tarefas]
-    logger.info("notificacao_enviada", produto_id=str(product.id), evento=evento, canais=canais_enviados)
+    logger.info(
+        "notificacao_enviada",
+        produto_id=str(product.id),
+        evento=evento,
+        canais=canais_enviados,
+        run_status=run_status,
+        participants_count=participants_count,
+    )

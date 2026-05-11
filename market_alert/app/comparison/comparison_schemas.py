@@ -1,8 +1,11 @@
 import uuid
 from datetime import datetime
 from decimal import Decimal
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
+
+RunStatusLiteral = Literal["complete", "partial", "expired", "no_competitors", "manual"]
 
 
 class ComparisonRead(BaseModel):
@@ -17,3 +20,11 @@ class ComparisonRead(BaseModel):
     max_price: Decimal
     potential_adjustment: Decimal | None
     calculated_at: datetime
+
+    # Campos de auditoria da rodada
+    run_id: str | None
+    run_status: RunStatusLiteral | None
+    product_price: Decimal | None
+    participants_count: int | None
+    valid_competitors_count: int | None
+    ignored_competitors_count: int | None

@@ -43,7 +43,7 @@ from app.products.competitor.competitor_service import collect_competitor
 from app.products.monitored.monitored_model import MonitoredProduct
 from app.products.monitored.monitored_service import collect_product
 from app.workers.celery_app import celery_app
-from app.workers.collection_run import is_complete, mark_done, start_run
+from app.workers.collection_run import get_status, mark_done, mark_failed, start_run
 from app.workers.redis import get_redis
 
 logger = structlog.get_logger()
@@ -69,7 +69,7 @@ def collector_task(
     Args:
         product_id:    UUID do MonitoredProduct (string).
         competitor_id: UUID do Competitor (string).
-        run_id:        product_id da rodada coordenada, quando aplicável.
+        run_id:        UUIDv4 da rodada coordenada, quando aplicável.
     """
     redis = get_redis()
     scraper = ScraperClient()
@@ -154,14 +154,15 @@ def collector_task(
 
                 rodada_id: str | None = None
                 if concorrentes:
-                    rodada_id = product_id
+                    rodada_id = str(uuid.uuid4())
                     ids = [str(c.id) for c in concorrentes]
-                    start_run(redis, product_id, ids, timeout=settings.collection_run_timeout_seconds)
+                    start_run(redis, rodada_id, product_id, ids, timeout=settings.collection_run_timeout_seconds)
                     for c in concorrentes:
                         collector_task.delay(competitor_id=str(c.id), run_id=rodada_id)
                     logger.info(
                         "rodada_coordenada_iniciada",
                         produto_id=product_id,
+                        run_id=rodada_id,
                         total_concorrentes=len(concorrentes),
                     )
 
@@ -205,11 +206,11 @@ def collector_task(
                     resultado = await collect_competitor(session, redis, scraper, concorrente)
                 except ScraperUnavailableError as exc:
                     if run_id:
-                        mark_done(redis, run_id, competitor_id)
+                        mark_failed(redis, run_id, competitor_id)
                     raise self.retry(exc=exc)
                 except ScraperParseError as exc:
                     if run_id:
-                        mark_done(redis, run_id, competitor_id)
+                        mark_failed(redis, run_id, competitor_id)
                     if exc.error_result.retryable:
                         raise self.retry(exc=exc)
                     logger.warning(
@@ -263,19 +264,23 @@ def comparison_task(
         monitored_id: UUID do MonitoredProduct (string).
         old_price:    Preço antes da coleta (string Decimal).
         new_price:    Preço após a coleta (string Decimal).
-        run_id:       product_id da rodada coordenada, se aplicável.
+        run_id:       UUIDv4 da rodada coordenada, se aplicável.
     """
     redis = get_redis()
 
-    # Aguarda rodada coordenada se ainda em andamento
-    if run_id and not is_complete(redis, run_id):
-        logger.info(
-            "comparacao_aguardando_rodada",
-            monitored_id=monitored_id,
-            run_id=run_id,
-            tentativa=self.request.retries,
-        )
-        raise self.retry()
+    # Aguarda ou resolve estado da rodada coordenada
+    run_status: str | None = None
+    if run_id:
+        rodada_status = get_status(redis, run_id)
+        if rodada_status == "pending":
+            logger.info(
+                "comparacao_aguardando_rodada",
+                monitored_id=monitored_id,
+                run_id=run_id,
+                tentativa=self.request.retries,
+            )
+            raise self.retry()
+        run_status = rodada_status
 
     async def _executar():
         async with AsyncSessionLocal() as session:
@@ -292,7 +297,7 @@ def comparison_task(
             )
             status_anterior = comparacao_anterior.status if comparacao_anterior else None
 
-            comparacao = await calculate_comparison(session, redis, mid)
+            comparacao = await calculate_comparison(session, redis, mid, run_id=run_id, run_status=run_status)
 
             if comparacao:
                 produto = await session.get(MonitoredProduct, mid)
@@ -305,6 +310,8 @@ def comparison_task(
                         new_price=Decimal(new_price) if new_price else None,
                         old_status=status_anterior,
                         new_status=comparacao.status,
+                        run_status=run_status,
+                        participants_count=comparacao.participants_count,
                     )
 
     asyncio.run(_executar())

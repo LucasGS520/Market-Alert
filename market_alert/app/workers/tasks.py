@@ -33,14 +33,15 @@ import structlog
 from celery import Task
 from sqlalchemy import and_, select
 
-from app.clients.scraper import ScraperClient, ScraperParseError, ScraperUnavailableError
-from app.core.database import AsyncSessionLocal
-from app.core.redis_client import get_redis
-from app.models.competitor import Competitor
-from app.models.monitored_product import MonitoredProduct
-from app.services.collection import collect_competitor, collect_product
-from app.services.comparison import calculate_comparison
+from app.infra.database import AsyncSessionLocal
+from app.infra.clients.scraper import ScraperClient, ScraperParseError, ScraperUnavailableError
+from app.comparison.comparison_service import calculate_comparison
+from app.products.competitor.competitor_model import Competitor
+from app.products.competitor.competitor_service import collect_competitor
+from app.products.monitored.monitored_model import MonitoredProduct
+from app.products.monitored.monitored_service import collect_product
 from app.workers.celery_app import celery_app
+from app.workers.redis import get_redis
 
 logger = structlog.get_logger()
 
@@ -168,7 +169,7 @@ def comparison_task(
 
             if comparacao:
                 # Avalia se deve enviar notificação com base na variação de preço/status
-                from app.services.notifications import evaluate_and_send
+                from app.notifications.notifications_service import evaluate_and_send
 
                 produto = await session.get(MonitoredProduct, mid)
                 if produto:

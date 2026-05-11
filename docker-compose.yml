@@ -10,7 +10,7 @@ services:
     networks:
       - market_net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U market"]
+      test: ["CMD-SHELL", "pg_isready -U market -d market_alert"]
       interval: 5s
       timeout: 5s
       retries: 10

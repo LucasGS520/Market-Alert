@@ -21,7 +21,7 @@ Por que Redis como broker?
 from celery import Celery
 from celery.schedules import crontab
 
-from app.core.config import settings
+from app.infra.config import settings
 
 celery_app = Celery("market_alert")
 

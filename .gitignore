@@ -33,6 +33,7 @@ venv.bak/
 
 # Test / coverage
 .pytest_cache/
+pytest-cache-files-*/
 .coverage
 .coverage.*
 htmlcov/

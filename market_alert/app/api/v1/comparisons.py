@@ -17,9 +17,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_session
-from app.models.comparison import Comparison
-from app.schemas.comparison import ComparisonRead
+from app.infra.database import get_session
+from app.comparison.comparison_model import Comparison
+from app.comparison.comparison_schemas import ComparisonRead
+
 
 router = APIRouter(prefix="/comparisons", tags=["comparisons"])
 

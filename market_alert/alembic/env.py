@@ -26,8 +26,13 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 # Importa todos os modelos para que o Alembic os detecte ao gerar migrations
-import app.models  # noqa: F401
-from app.core.database import Base
+from app.comparison import comparison_model  # noqa: F401
+from app.infra.config import settings
+from app.infra.database import Base
+from app.notifications import notifications_model  # noqa: F401
+from app.products.competitor import competitor_model  # noqa: F401
+from app.products.monitored import monitored_model  # noqa: F401
+from app.products.price_history import price_model  # noqa: F401
 
 config = context.config
 
@@ -42,9 +47,9 @@ target_metadata = Base.metadata
 _url_banco = (
     os.environ.get("DATABASE_SYNC_URL")
     or os.environ.get("DATABASE_URL", "").replace("postgresql+asyncpg://", "postgresql+psycopg2://")
+    or settings.database_sync_url
 )
-if _url_banco:
-    config.set_main_option("sqlalchemy.url", _url_banco)
+config.set_main_option("sqlalchemy.url", _url_banco)
 
 
 def run_migrations_offline() -> None:

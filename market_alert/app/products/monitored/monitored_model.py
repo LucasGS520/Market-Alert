@@ -12,6 +12,11 @@ ProductStatus = Enum(
     name="product_status",
 )
 
+StabilityLevel = Enum(
+    "unstable", "stable", "very_stable",
+    name="stability_level",
+)
+
 
 class MonitoredProduct(Base):
     __tablename__ = "monitored_products"
@@ -34,6 +39,22 @@ class MonitoredProduct(Base):
     last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     check_interval_minutes: Mapped[int] = mapped_column(Integer, nullable=False, server_default="60")
     consecutive_unchanged: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+
+    # ── Estado de Estabilidade ─────────────────────────────────────────────
+    stability_level: Mapped[str] = mapped_column(
+        StabilityLevel, nullable=False, server_default="unstable"
+    )
+    last_price_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_significant_price_change_percent: Mapped[float | None] = mapped_column(Numeric(8, 4), nullable=True)
+    last_availability_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # ── Controle Operacional de Rodada ────────────────────────────────────
+    last_scheduled_delay_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    collection_lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_collection_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_collection_finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    consecutive_failures: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    next_check_reason: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

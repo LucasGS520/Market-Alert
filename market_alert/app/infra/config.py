@@ -44,6 +44,20 @@ class Settings(BaseSettings):
     collection_retry_max_delay_minutes: int = 60
     collection_run_timeout_seconds: int = 300  # SLA máximo de uma rodada coordenada
 
+    # ── Política de Estabilidade ───────────────────────────────────────────
+    price_stability_change_threshold_percent: float = 1.0
+
+    # ── Scheduler com Lease ────────────────────────────────────────────────
+    scheduler_batch_size: int = 50
+    scheduler_lock_ttl_seconds: int = 55
+    collection_lease_ttl_seconds: int = 120
+
+    # ── Reagendamento por Motivo ───────────────────────────────────────────
+    rate_limit_reschedule_min_minutes: int = 5
+    rate_limit_reschedule_max_minutes: int = 15
+    lock_busy_reschedule_min_minutes: int = 2
+    lock_busy_reschedule_max_minutes: int = 5
+
     # ── Servidor ───────────────────────────────────────────────────────────
     log_level: str = "INFO"
 

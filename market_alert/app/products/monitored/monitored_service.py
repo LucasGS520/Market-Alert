@@ -1,7 +1,6 @@
-import random
 import time
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from decimal import Decimal
 from urllib.parse import urlparse
 
@@ -15,32 +14,10 @@ from app.infra.clients.scraper import ScraperClient, ScraperParseError, ScraperU
 from app.infra.scraper_errors import classify_scraper_error
 from app.products.monitored.monitored_model import MonitoredProduct
 from app.products.price_history.price_model import PriceHistory
+from app.scheduling.policy import CheckReason, classify_stability, compute_next_check, is_significant_change
 from app.workers.redis import acquire_lock, check_rate_limit, release_lock, set_domain_cooldown
 
 logger = structlog.get_logger()
-
-# ── Scheduling ─────────────────────────────────────────────────────────────────
-
-
-def compute_next_interval(current_interval: int, price_changed: bool, consecutive_unchanged: int) -> int:
-    """Calcula o próximo intervalo base de coleta (sem jitter).
-
-    O jitter (±20 %) deve ser aplicado pelo chamador ao calcular next_check_at,
-    para evitar thundering herd sem corromper o estado armazenado.
-    """
-    from app.infra.config import settings
-
-    if price_changed:
-        return max(settings.min_check_interval_minutes, current_interval // 2)
-    if consecutive_unchanged >= settings.consecutive_unchanged_threshold:
-        return min(settings.max_check_interval_minutes, current_interval * 2)
-    return current_interval
-
-
-def _next_check_at(now: datetime, interval_minutes: int) -> datetime:
-    """Aplica jitter de ±20 % sobre o intervalo e retorna o próximo horário de coleta."""
-    jittered = random.uniform(interval_minutes * 0.8, interval_minutes * 1.2)
-    return now + timedelta(minutes=jittered)
 
 
 # ── CRUD ────────────────────────────────────────────────────────────────────────
@@ -148,7 +125,25 @@ async def collect_product(
 
     chave_lock = f"lock:collect:{product.id}"
     if not acquire_lock(redis, chave_lock, timeout=300):
+        now = datetime.now(timezone.utc)
         logger.info("coleta_pulada_lock_ativo", produto_id=str(product.id))
+        next_dt, delay = compute_next_check(
+            reason="lock_busy",
+            now=now,
+            stability_level=product.stability_level,
+            last_scheduled_delay_minutes=product.last_scheduled_delay_minutes,
+            consecutive_failures=product.consecutive_failures or 0,
+            base_backoff_minutes=settings.collection_retry_base_delay_minutes,
+            max_backoff_minutes=settings.collection_retry_max_delay_minutes,
+            rate_limit_min=settings.rate_limit_reschedule_min_minutes,
+            rate_limit_max=settings.rate_limit_reschedule_max_minutes,
+            lock_busy_min=settings.lock_busy_reschedule_min_minutes,
+            lock_busy_max=settings.lock_busy_reschedule_max_minutes,
+        )
+        product.next_check_at = next_dt
+        product.last_scheduled_delay_minutes = delay
+        product.next_check_reason = "lock_busy"
+        await session.commit()
         return {"success": False, "reason": "lock_busy"}
 
     logger.info("lock_adquirido", produto_id=str(product.id))
@@ -156,7 +151,25 @@ async def collect_product(
     try:
         dominio = urlparse(product.url_original).netloc
         if not check_rate_limit(redis, dominio):
+            now = datetime.now(timezone.utc)
             logger.info("coleta_rate_limited", dominio=dominio, produto_id=str(product.id))
+            next_dt, delay = compute_next_check(
+                reason="rate_limited",
+                now=now,
+                stability_level=product.stability_level,
+                last_scheduled_delay_minutes=product.last_scheduled_delay_minutes,
+                consecutive_failures=product.consecutive_failures or 0,
+                base_backoff_minutes=settings.collection_retry_base_delay_minutes,
+                max_backoff_minutes=settings.collection_retry_max_delay_minutes,
+                rate_limit_min=settings.rate_limit_reschedule_min_minutes,
+                rate_limit_max=settings.rate_limit_reschedule_max_minutes,
+                lock_busy_min=settings.lock_busy_reschedule_min_minutes,
+                lock_busy_max=settings.lock_busy_reschedule_max_minutes,
+            )
+            product.next_check_at = next_dt
+            product.last_scheduled_delay_minutes = delay
+            product.next_check_reason = "rate_limited"
+            await session.commit()
             return {"success": False, "reason": "rate_limited"}
 
         logger.info(
@@ -172,6 +185,23 @@ async def collect_product(
             logger.warning("scraper_indisponivel", produto_id=str(product.id), erro=str(exc))
             product.status = "error"
             product.last_checked_at = now
+            product.consecutive_failures = (product.consecutive_failures or 0) + 1
+            next_dt, delay = compute_next_check(
+                reason="error_backoff",
+                now=now,
+                stability_level=product.stability_level,
+                last_scheduled_delay_minutes=product.last_scheduled_delay_minutes,
+                consecutive_failures=product.consecutive_failures,
+                base_backoff_minutes=settings.collection_retry_base_delay_minutes,
+                max_backoff_minutes=settings.collection_retry_max_delay_minutes,
+                rate_limit_min=settings.rate_limit_reschedule_min_minutes,
+                rate_limit_max=settings.rate_limit_reschedule_max_minutes,
+                lock_busy_min=settings.lock_busy_reschedule_min_minutes,
+                lock_busy_max=settings.lock_busy_reschedule_max_minutes,
+            )
+            product.next_check_at = next_dt
+            product.last_scheduled_delay_minutes = delay
+            product.next_check_reason = "error_backoff"
             await session.commit()
             raise
         except ScraperParseError as exc:
@@ -195,39 +225,73 @@ async def collect_product(
             product.last_checked_at = now
 
             if cls.status == "unavailable":
+                if product.is_available:
+                    product.last_availability_changed_at = now
                 product.status = "unavailable"
                 product.is_available = False
-                proximo_intervalo = compute_next_interval(
-                    current_interval=product.check_interval_minutes,
-                    price_changed=False,
-                    consecutive_unchanged=(product.consecutive_unchanged or 0) + 1,
+                product.consecutive_failures = 0
+                new_stability = classify_stability(
+                    consecutive_unchanged=product.consecutive_unchanged or 0,
+                    last_availability_changed_at=product.last_availability_changed_at,
+                    now=now,
+                    unstable_threshold=settings.consecutive_unchanged_threshold,
+                    very_stable_threshold=settings.consecutive_unchanged_threshold * 5,
                 )
-                product.check_interval_minutes = proximo_intervalo
-                product.next_check_at = _next_check_at(now, proximo_intervalo)
+                product.stability_level = new_stability
+                next_dt, delay = compute_next_check(
+                    reason="unavailable",
+                    now=now,
+                    stability_level=new_stability,
+                    last_scheduled_delay_minutes=product.last_scheduled_delay_minutes,
+                    consecutive_failures=0,
+                    base_backoff_minutes=settings.collection_retry_base_delay_minutes,
+                    max_backoff_minutes=settings.collection_retry_max_delay_minutes,
+                    rate_limit_min=settings.rate_limit_reschedule_min_minutes,
+                    rate_limit_max=settings.rate_limit_reschedule_max_minutes,
+                    lock_busy_min=settings.lock_busy_reschedule_min_minutes,
+                    lock_busy_max=settings.lock_busy_reschedule_max_minutes,
+                )
+                product.check_interval_minutes = delay or product.check_interval_minutes
+                product.last_scheduled_delay_minutes = delay
+                product.next_check_at = next_dt
+                product.next_check_reason = "unavailable"
                 await session.commit()
                 logger.info(
                     "produto_indisponivel_por_erro",
                     produto_id=str(product.id),
                     error_code=error_code,
-                    proximo_intervalo_min=proximo_intervalo,
+                    stability_level=new_stability,
+                    proximo_intervalo_min=delay,
                 )
                 return {"success": False, "reason": "unavailable", "retryable": False}
 
             if cls.status == "unsupported":
                 product.status = "unsupported"
                 product.next_check_at = None
+                product.next_check_reason = "unsupported"
                 await session.commit()
                 logger.info("produto_nao_suportado", produto_id=str(product.id), error_code=error_code)
                 return {"success": False, "reason": "unsupported", "retryable": False}
 
-            # status == "error" — agendar backoff e re-raise para Celery retry
+            # status == "error" — backoff exponencial por consecutive_failures, re-raise para Celery retry
             product.status = "error"
-            attempt = 1  # incrementado pelo Celery no retry; aqui é o primeiro erro
-            delay = min(
-                settings.collection_retry_base_delay_minutes * attempt,
-                settings.collection_retry_max_delay_minutes,
+            product.consecutive_failures = (product.consecutive_failures or 0) + 1
+            next_dt, delay = compute_next_check(
+                reason="error_backoff",
+                now=now,
+                stability_level=product.stability_level,
+                last_scheduled_delay_minutes=product.last_scheduled_delay_minutes,
+                consecutive_failures=product.consecutive_failures,
+                base_backoff_minutes=settings.collection_retry_base_delay_minutes,
+                max_backoff_minutes=settings.collection_retry_max_delay_minutes,
+                rate_limit_min=settings.rate_limit_reschedule_min_minutes,
+                rate_limit_max=settings.rate_limit_reschedule_max_minutes,
+                lock_busy_min=settings.lock_busy_reschedule_min_minutes,
+                lock_busy_max=settings.lock_busy_reschedule_max_minutes,
             )
-            product.next_check_at = now + timedelta(minutes=delay)
+            product.next_check_at = next_dt
+            product.last_scheduled_delay_minutes = delay
+            product.next_check_reason = "error_backoff"
             await session.commit()
             raise
 
@@ -255,26 +319,57 @@ async def collect_product(
             )
             session.add(historico)
 
+            disponibilidade_mudou_para_ativa = product.is_available is False
             product.current_price = float(novo_preco)
             product.is_available = True
             product.status = "active"
             product.last_checked_at = now
+            product.consecutive_failures = 0
 
             if resultado.title and not product.name:
                 product.name = resultado.title
 
             if preco_mudou:
                 product.consecutive_unchanged = 0
+                if preco_anterior is None:
+                    product.last_price_changed_at = now
+                elif is_significant_change(float(preco_anterior), float(novo_preco), settings.price_stability_change_threshold_percent):
+                    delta_pct = abs(float(novo_preco) - float(preco_anterior)) / float(preco_anterior) * 100
+                    product.last_price_changed_at = now
+                    product.last_significant_price_change_percent = delta_pct
+                razao: CheckReason = "success_price_changed"
             else:
                 product.consecutive_unchanged = (product.consecutive_unchanged or 0) + 1
+                razao = "success_price_unchanged"
 
-            proximo_intervalo = compute_next_interval(
-                current_interval=product.check_interval_minutes,
-                price_changed=preco_mudou,
+            if disponibilidade_mudou_para_ativa:
+                product.last_availability_changed_at = now
+
+            new_stability = classify_stability(
                 consecutive_unchanged=product.consecutive_unchanged,
+                last_availability_changed_at=product.last_availability_changed_at,
+                now=now,
+                unstable_threshold=settings.consecutive_unchanged_threshold,
+                very_stable_threshold=settings.consecutive_unchanged_threshold * 5,
             )
-            product.check_interval_minutes = proximo_intervalo
-            product.next_check_at = _next_check_at(now, proximo_intervalo)
+            product.stability_level = new_stability
+            next_dt, delay = compute_next_check(
+                reason=razao,
+                now=now,
+                stability_level=new_stability,
+                last_scheduled_delay_minutes=product.last_scheduled_delay_minutes,
+                consecutive_failures=0,
+                base_backoff_minutes=settings.collection_retry_base_delay_minutes,
+                max_backoff_minutes=settings.collection_retry_max_delay_minutes,
+                rate_limit_min=settings.rate_limit_reschedule_min_minutes,
+                rate_limit_max=settings.rate_limit_reschedule_max_minutes,
+                lock_busy_min=settings.lock_busy_reschedule_min_minutes,
+                lock_busy_max=settings.lock_busy_reschedule_max_minutes,
+            )
+            product.check_interval_minutes = delay
+            product.last_scheduled_delay_minutes = delay
+            product.next_check_at = next_dt
+            product.next_check_reason = razao
 
             await session.commit()
             await session.refresh(historico)
@@ -284,7 +379,9 @@ async def collect_product(
                 produto_id=str(product.id),
                 preco=str(novo_preco),
                 preco_mudou=preco_mudou,
-                proximo_intervalo_min=proximo_intervalo,
+                stability_level=new_stability,
+                proximo_intervalo_min=delay,
+                next_check_reason=razao,
                 extraction_method=resultado.extraction_method,
                 confidence=resultado.confidence,
                 duracao_s=round(time.monotonic() - inicio, 2),
@@ -308,24 +405,46 @@ async def collect_product(
                 )
                 session.add(historico)
 
+            if product.is_available:
+                product.last_availability_changed_at = now
             product.is_available = False
             product.status = "unavailable"
             product.last_checked_at = now
+            product.consecutive_failures = 0
 
-            proximo_intervalo = compute_next_interval(
-                current_interval=product.check_interval_minutes,
-                price_changed=False,
-                consecutive_unchanged=(product.consecutive_unchanged or 0) + 1,
+            new_stability = classify_stability(
+                consecutive_unchanged=product.consecutive_unchanged or 0,
+                last_availability_changed_at=product.last_availability_changed_at,
+                now=now,
+                unstable_threshold=settings.consecutive_unchanged_threshold,
+                very_stable_threshold=settings.consecutive_unchanged_threshold * 5,
             )
-            product.check_interval_minutes = proximo_intervalo
-            product.next_check_at = _next_check_at(now, proximo_intervalo)
+            product.stability_level = new_stability
+            next_dt, delay = compute_next_check(
+                reason="unavailable",
+                now=now,
+                stability_level=new_stability,
+                last_scheduled_delay_minutes=product.last_scheduled_delay_minutes,
+                consecutive_failures=0,
+                base_backoff_minutes=settings.collection_retry_base_delay_minutes,
+                max_backoff_minutes=settings.collection_retry_max_delay_minutes,
+                rate_limit_min=settings.rate_limit_reschedule_min_minutes,
+                rate_limit_max=settings.rate_limit_reschedule_max_minutes,
+                lock_busy_min=settings.lock_busy_reschedule_min_minutes,
+                lock_busy_max=settings.lock_busy_reschedule_max_minutes,
+            )
+            product.check_interval_minutes = delay or product.check_interval_minutes
+            product.last_scheduled_delay_minutes = delay
+            product.next_check_at = next_dt
+            product.next_check_reason = "unavailable"
 
             await session.commit()
 
             logger.info(
                 "produto_indisponivel",
                 produto_id=str(product.id),
-                proximo_intervalo_min=proximo_intervalo,
+                stability_level=new_stability,
+                proximo_intervalo_min=delay,
                 duracao_s=round(time.monotonic() - inicio, 2),
             )
             return {"success": False, "reason": "unavailable"}

@@ -6,15 +6,22 @@ na mesma janela de tempo.
 
 Chave Redis: collection_run:{run_id}   (run_id é UUIDv4, único por rodada)
 Tipo: Hash
-  __meta__   → JSON {monitored_id, expires_at (unix float)}
-  {competitor_id} → "pending" | "done" | "failed"
+  __meta__        → JSON {monitored_id, expires_at (unix float)}
+  {competitor_id} → "pending" | "done" | "failed" | "deferred" | "skipped"
 TTL: timeout (padrão 300 s)
 
+Estados por concorrente:
+  pending  — aguardando coleta (não iniciada ou em retry intermediário)
+  done     — coletado com sucesso
+  failed   — falha definitiva (após última tentativa)
+  deferred — adiado temporariamente (rate_limited, lock_busy)
+  skipped  — pulado por status inelegível (paused, unsupported)
+
 Estados da rodada (get_status):
-  pending       — ainda há concorrentes pendentes dentro do TTL
-  complete      — todos terminaram com sucesso
-  partial       — todos terminaram, mas pelo menos um falhou definitivamente
-  expired       — TTL esgotou antes de todos terminarem (chave ausente)
+  pending        — ainda há concorrentes em "pending" dentro do TTL
+  complete       — todos terminaram em "done" ou "skipped"
+  partial        — todos terminaram, mas há "failed" ou "deferred"
+  expired        — TTL esgotou antes de todos terminarem (chave ausente)
   no_competitors — rodada iniciada sem concorrentes
 """
 
@@ -59,6 +66,20 @@ def mark_failed(redis: Redis, run_id: str, competitor_id: str) -> None:
         redis.hset(key, competitor_id, "failed")
 
 
+def mark_deferred(redis: Redis, run_id: str, competitor_id: str) -> None:
+    """Marca um concorrente como adiado (rate_limited, lock_busy)."""
+    key = f"{_PREFIX}:{run_id}"
+    if redis.exists(key):
+        redis.hset(key, competitor_id, "deferred")
+
+
+def mark_skipped(redis: Redis, run_id: str, competitor_id: str) -> None:
+    """Marca um concorrente como pulado por status inelegível (paused, unsupported)."""
+    key = f"{_PREFIX}:{run_id}"
+    if redis.exists(key):
+        redis.hset(key, competitor_id, "skipped")
+
+
 def get_status(redis: Redis, run_id: str) -> str:
     """Retorna o estado atual da rodada.
 
@@ -87,9 +108,11 @@ def get_status(redis: Redis, run_id: str) -> str:
     if any(s == "pending" for s in values):
         return "pending"
 
-    if any(s == "failed" for s in values):
+    # deferred (dados ausentes) e failed (erro definitivo) marcam rodada como parcial
+    if any(s in ("failed", "deferred") for s in values):
         return "partial"
 
+    # done + skipped = rodada completa (skipped é esperado para inelegíveis)
     return "complete"
 
 

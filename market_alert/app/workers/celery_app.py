@@ -43,11 +43,15 @@ celery_app.conf.update(
 
     # Roteamento: cada tipo de tarefa vai para a fila correspondente
     task_routes={
+        "app.workers.orchestrator.collection_orchestrator_task": {"queue": "collection"},
         "app.workers.tasks.collector_task": {"queue": "collection"},
         "app.workers.tasks.comparison_task": {"queue": "comparison"},
         "app.workers.tasks.notification_task": {"queue": "notification"},
         "app.workers.tasks.scheduler_task": {"queue": "default"},
     },
+
+    # Módulos de tarefas além do padrão tasks.py (não cobertos pelo autodiscover)
+    include=["app.workers.orchestrator"],
 
     # Agenda periódica do Beat: roda o scheduler a cada minuto
     beat_schedule={

@@ -94,7 +94,7 @@ services:
     command: >
       celery -A app.workers.celery_app worker
       --loglevel=info
-      --queues=comparison,default
+      --queues=comparison,default,notification
       --concurrency=4
     env_file: .env
     networks:

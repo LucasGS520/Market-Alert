@@ -285,7 +285,9 @@ def comparison_task(
     async def _executar():
         async with AsyncSessionLocal() as session:
             from app.comparison.comparison_model import Comparison
-            from app.notifications.notifications_service import evaluate_and_send
+            from app.infra.config import settings as _settings
+            from app.notifications.notifications_service import detect_notification_event
+            from app.workers.redis import is_in_cooldown
 
             mid = uuid.UUID(monitored_id)
 
@@ -302,19 +304,141 @@ def comparison_task(
             if comparacao:
                 produto = await session.get(MonitoredProduct, mid)
                 if produto:
-                    await evaluate_and_send(
-                        session=session,
-                        redis=redis,
-                        product=produto,
-                        old_price=Decimal(old_price) if old_price else None,
-                        new_price=Decimal(new_price) if new_price else None,
-                        old_status=status_anterior,
-                        new_status=comparacao.status,
-                        run_status=run_status,
-                        participants_count=comparacao.participants_count,
+                    preco_anterior = Decimal(old_price) if old_price else None
+                    preco_novo = Decimal(new_price) if new_price else None
+
+                    evento = detect_notification_event(
+                        preco_anterior, preco_novo,
+                        status_anterior, comparacao.status,
+                        _settings.notification_delta_percent,
                     )
 
+                    if evento and not is_in_cooldown(redis, mid, evento):
+                        notification_task.delay(
+                            monitored_id=str(mid),
+                            comparison_id=str(comparacao.id),
+                            event_type=evento,
+                            old_price=old_price,
+                            new_price=new_price,
+                            old_status=status_anterior,
+                            new_status=comparacao.status,
+                            product_url=produto.url_original,
+                            product_name=produto.name,
+                            run_id=run_id,
+                            run_status=run_status,
+                            participants_count=comparacao.participants_count,
+                        )
+                        logger.info(
+                            "notificacao_enfileirada",
+                            produto_id=str(mid),
+                            evento=evento,
+                            comparison_id=str(comparacao.id),
+                            run_id=run_id,
+                        )
+                    elif not evento:
+                        logger.debug(
+                            "notificacao_sem_evento",
+                            produto_id=str(mid),
+                            run_id=run_id,
+                            run_status=run_status,
+                        )
+                    else:
+                        logger.debug(
+                            "notificacao_cooldown_ativo",
+                            produto_id=str(mid),
+                            evento=evento,
+                            run_status=run_status,
+                        )
+
     asyncio.run(_executar())
+
+
+@celery_app.task(
+    bind=True,
+    max_retries=3,
+    default_retry_delay=60,
+    name="app.workers.tasks.notification_task",
+)
+def notification_task(
+    self: Task,
+    monitored_id: str,
+    comparison_id: str | None,
+    event_type: str,
+    old_price: str | None,
+    new_price: str | None,
+    old_status: str | None,
+    new_status: str | None,
+    product_url: str,
+    product_name: str | None = None,
+    run_id: str | None = None,
+    run_status: str | None = None,
+    participants_count: int | None = None,
+) -> None:
+    """Entrega o alerta para os canais configurados com retry/backoff independente.
+
+    Retry automático (até 3x, intervalo 60 s) para falhas retryable
+    (timeout, conexão, HTTP 5xx/429). Canais já entregues com sucesso são
+    idempotentes: não são reenviados em tentativas posteriores.
+
+    Args:
+        monitored_id:      UUID do MonitoredProduct (string).
+        comparison_id:     UUID da Comparison que gerou o evento (string).
+        event_type:        Tipo do evento: price_drop, price_rise, status_change.
+        old_price:         Preço anterior (string Decimal) ou None.
+        new_price:         Preço novo (string Decimal) ou None.
+        old_status:        Status competitivo anterior ou None.
+        new_status:        Novo status competitivo ou None.
+        product_url:       URL original do produto monitorado.
+        product_name:      Nome do produto (opcional).
+        run_id:            ID da rodada coordenada, se aplicável.
+        run_status:        Status da rodada (complete, partial, etc.), se aplicável.
+        participants_count: Total de concorrentes considerados na comparação.
+    """
+    from app.notifications.notifications_service import (
+        NotificationPayload,
+        RetryableDeliveryError,
+        send_notification,
+    )
+
+    redis = get_redis()
+
+    payload = NotificationPayload(
+        monitored_id=uuid.UUID(monitored_id),
+        comparison_id=uuid.UUID(comparison_id) if comparison_id else None,
+        event_type=event_type,
+        old_price=Decimal(old_price) if old_price else None,
+        new_price=Decimal(new_price) if new_price else None,
+        old_status=old_status,
+        new_status=new_status,
+        run_id=run_id,
+        run_status=run_status,
+        participants_count=participants_count,
+    )
+
+    logger.info(
+        "notification_task_iniciando",
+        monitored_id=monitored_id,
+        comparison_id=comparison_id,
+        event_type=event_type,
+        tentativa=self.request.retries,
+    )
+
+    async def _executar():
+        async with AsyncSessionLocal() as session:
+            await send_notification(session, redis, payload, product_name, product_url)
+
+    try:
+        asyncio.run(_executar())
+    except RetryableDeliveryError as exc:
+        logger.warning(
+            "notification_task_retry",
+            monitored_id=monitored_id,
+            comparison_id=comparison_id,
+            event_type=event_type,
+            tentativa=self.request.retries,
+            erro=str(exc),
+        )
+        raise self.retry(exc=exc)
 
 
 @celery_app.task(name="app.workers.tasks.scheduler_task")

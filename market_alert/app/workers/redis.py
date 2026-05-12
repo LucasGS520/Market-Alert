@@ -43,18 +43,20 @@ def set_domain_cooldown(redis: Redis, domain: str) -> None:
 
 
 # ── Cooldown de notificações ───────────────────────────────────────────────────
+# Granularidade: produto + tipo de evento.
+# Cooldown de um evento não bloqueia outros eventos do mesmo produto.
 
-def notification_cooldown_key(monitored_id: uuid.UUID) -> str:
-    return f"ratelimit:notify:{monitored_id}"
-
-
-def is_in_cooldown(redis: Redis, monitored_id: uuid.UUID) -> bool:
-    return bool(redis.exists(notification_cooldown_key(monitored_id)))
+def notification_cooldown_key(monitored_id: uuid.UUID, event_type: str) -> str:
+    return f"cooldown:notify:{monitored_id}:{event_type}"
 
 
-def set_cooldown(redis: Redis, monitored_id: uuid.UUID) -> None:
+def is_in_cooldown(redis: Redis, monitored_id: uuid.UUID, event_type: str) -> bool:
+    return bool(redis.exists(notification_cooldown_key(monitored_id, event_type)))
+
+
+def set_cooldown(redis: Redis, monitored_id: uuid.UUID, event_type: str) -> None:
     ttl = settings.notification_cooldown_minutes * 60
-    redis.set(notification_cooldown_key(monitored_id), "1", ex=ttl)
+    redis.set(notification_cooldown_key(monitored_id, event_type), "1", ex=ttl)
 
 
 # ── Cache ──────────────────────────────────────────────────────────────────────

@@ -45,6 +45,7 @@ celery_app.conf.update(
     task_routes={
         "app.workers.tasks.collector_task": {"queue": "collection"},
         "app.workers.tasks.comparison_task": {"queue": "comparison"},
+        "app.workers.tasks.notification_task": {"queue": "notification"},
         "app.workers.tasks.scheduler_task": {"queue": "default"},
     },
 

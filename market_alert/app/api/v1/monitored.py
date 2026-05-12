@@ -36,8 +36,8 @@ async def create_monitored(body: MonitoredProductCreate, session: Session) -> Mo
     produto = await create_product(session, str(body.url), body.name)
 
     try:
-        from app.workers.tasks import collector_task
-        tarefa = collector_task.delay(product_id=str(produto.id))
+        from app.workers.orchestrator import collection_orchestrator_task
+        tarefa = collection_orchestrator_task.delay(product_id=str(produto.id))
         logger.info("coleta_enfileirada", produto_id=str(produto.id), tarefa_id=tarefa.id)
     except Exception as exc:
         logger.warning("enfileiramento_falhou", produto_id=str(produto.id), erro=str(exc))
@@ -95,12 +95,6 @@ async def add_competitor(
         logger.info("coleta_concorrente_enfileirada", concorrente_id=str(concorrente.id), tarefa_id=tarefa.id)
     except Exception as exc:
         logger.warning("enfileiramento_falhou", concorrente_id=str(concorrente.id), erro=str(exc))
-
-    try:
-        from app.workers.tasks import comparison_task
-        comparison_task.delay(monitored_id=str(monitored_id))
-    except Exception as exc:
-        logger.warning("recalculo_falhou", monitored_id=str(monitored_id), erro=str(exc))
 
     return concorrente
 

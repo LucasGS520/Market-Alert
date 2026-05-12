@@ -24,7 +24,7 @@ class NotificationLog(Base):
             "event_type",
             "channel",
             unique=True,
-            postgresql_where=text("comparison_id IS NOT NULL"),
+            postgresql_where=text("comparison_id IS NOT NULL AND delivery_status = 'sent'"),
         ),
     )
 

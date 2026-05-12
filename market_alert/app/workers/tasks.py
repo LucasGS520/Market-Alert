@@ -270,6 +270,17 @@ def comparison_task(
                     preco_anterior = Decimal(old_price) if old_price else None
                     preco_novo = Decimal(new_price) if new_price else None
 
+                    # Quando chamado sem preços (coleta autônoma de concorrente), usa variação
+                    # de min_price entre snapshots como proxy de mudança de cenário competitivo.
+                    if preco_anterior is None and preco_novo is None and comparacao_anterior is not None:
+                        min_ant = comparacao_anterior.min_price
+                        min_nov = comparacao.min_price
+                        if min_ant is not None and min_nov is not None and min_ant != min_nov:
+                            preco_anterior = Decimal(str(min_ant))
+                            preco_novo = Decimal(str(min_nov))
+                            old_price = str(preco_anterior)
+                            new_price = str(preco_novo)
+
                     evento = detect_notification_event(
                         preco_anterior, preco_novo,
                         status_anterior, comparacao.status,

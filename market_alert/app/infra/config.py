@@ -16,7 +16,7 @@ class Settings(BaseSettings):
 
     # ── Notificações ───────────────────────────────────────────────────────
     ntfy_url: str = "https://ntfy.sh"
-    ntfy_topic: str = "market_alert"
+    ntfy_topic: str | None = None
     telert_token: str | None = None
 
     # ── Regras de Negócio de Notificação ──────────────────────────────────
@@ -30,11 +30,6 @@ class Settings(BaseSettings):
 
     # ── Concorrentes ───────────────────────────────────────────────────────
     max_competitors_per_product: int = 5
-
-    # ── Intervalos de Agendamento ──────────────────────────────────────────
-    min_check_interval_minutes: int = 30
-    max_check_interval_minutes: int = 240
-    consecutive_unchanged_threshold: int = 3
 
     # ── Rate Limiting de Domínio ───────────────────────────────────────────
     domain_captcha_cooldown_seconds: int = 300
@@ -50,7 +45,7 @@ class Settings(BaseSettings):
     # ── Scheduler com Lease ────────────────────────────────────────────────
     scheduler_batch_size: int = 50
     scheduler_lock_ttl_seconds: int = 55
-    collection_lease_ttl_seconds: int = 120
+    collection_lease_ttl_seconds: int = 600
 
     # ── Reagendamento por Motivo ───────────────────────────────────────────
     rate_limit_reschedule_min_minutes: int = 5

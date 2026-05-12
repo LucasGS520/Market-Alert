@@ -12,7 +12,7 @@ class NotificationLogRead(BaseModel):
     monitored_id: uuid.UUID
     comparison_id: uuid.UUID | None
     event_type: str
-    channel: str
+    channel: str | None
     delivery_status: str
     message: str
     title: str | None

@@ -22,8 +22,8 @@ STABILITY_WINDOWS: dict[str, tuple[int, int]] = {
     "very_stable": (180, 360),
 }
 
-# Janela de volatilidade de disponibilidade: mudança recente → instável
-_AVAILABILITY_VOLATILITY_WINDOW_MINUTES = 120
+# Janela de volatilidade de disponibilidade: mudança recente nas últimas 24h → instável
+_AVAILABILITY_VOLATILITY_WINDOW_MINUTES = 1440
 
 # Tolerância para anti-repetição de delay: ±15 % do último valor
 _ANTI_REPEAT_TOLERANCE = 0.15
@@ -37,24 +37,31 @@ def is_significant_change(old_price: float, new_price: float, threshold_percent:
 
 
 def classify_stability(
-    consecutive_unchanged: int,
+    last_price_changed_at: datetime | None,
     last_availability_changed_at: datetime | None,
     now: datetime,
-    unstable_threshold: int,
-    very_stable_threshold: int,
 ) -> str:
-    """Classifica o nível de estabilidade do produto.
+    """Classifica o nível de estabilidade do produto com base em tempo.
 
-    Indisponibilidade recente força instável independente do histórico de preço.
+    Semântica temporal (substitui a anterior counter-based):
+    - unstable:    preço alterado há menos de 24h, ou nunca registrado
+    - stable:      preço inalterado entre 24h e 48h
+    - very_stable: preço inalterado há mais de 48h
+
+    Override: mudança de disponibilidade nas últimas 24h força "unstable"
+    independentemente do histórico de preço.
     """
     if last_availability_changed_at is not None:
         age_minutes = (now - last_availability_changed_at).total_seconds() / 60
         if age_minutes < _AVAILABILITY_VOLATILITY_WINDOW_MINUTES:
             return "unstable"
 
-    if consecutive_unchanged < unstable_threshold:
+    if last_price_changed_at is None:
         return "unstable"
-    if consecutive_unchanged < very_stable_threshold:
+    elapsed_hours = (now - last_price_changed_at).total_seconds() / 3600
+    if elapsed_hours < 24:
+        return "unstable"
+    if elapsed_hours < 48:
         return "stable"
     return "very_stable"
 

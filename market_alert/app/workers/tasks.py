@@ -181,10 +181,15 @@ def collector_task(
                         mark_deferred(redis, run_id, competitor_id)
                     elif razao in ("ineligible_status", "unsupported"):
                         mark_skipped(redis, run_id, competitor_id)
+                    elif razao == "unavailable":
+                        mark_done(redis, run_id, competitor_id)
                     else:
                         mark_failed(redis, run_id, competitor_id)
                 elif coleta_ok:
                     # Coleta autônoma (ex.: cadastro de novo concorrente): dispara comparação
+                    comparison_task.delay(monitored_id=monitored_id_str)
+                elif resultado.get("availability_changed"):
+                    # Disponibilidade do concorrente mudou; recalcula posição competitiva
                     comparison_task.delay(monitored_id=monitored_id_str)
 
                 logger.info(

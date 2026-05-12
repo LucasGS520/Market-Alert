@@ -28,7 +28,11 @@ def _calcular_status(preco_produto: Decimal, preco_minimo: Decimal) -> str:
 
 
 def _snapshot_identico(anterior: Comparison, novo: dict) -> bool:
-    """Retorna True se os indicadores competitivos do snapshot são idênticos."""
+    """Retorna True se os indicadores competitivos do snapshot são idênticos.
+
+    Inclui metadados de composição para evitar supressão quando o conjunto
+    de concorrentes muda (participants_count, valid/ignored counts, run_status).
+    """
     return (
         anterior.status == novo["status"]
         and anterior.ranking == novo["ranking"]
@@ -43,6 +47,10 @@ def _snapshot_identico(anterior: Comparison, novo: dict) -> bool:
                 and Decimal(str(anterior.potential_adjustment)) == novo["potential_adjustment"]
             )
         )
+        and anterior.participants_count == novo["participants_count"]
+        and anterior.valid_competitors_count == novo["valid_competitors_count"]
+        and anterior.ignored_competitors_count == novo["ignored_competitors_count"]
+        and anterior.run_status == novo["run_status"]
     )
 
 
@@ -146,6 +154,10 @@ async def calculate_comparison(
         "min_price": preco_minimo,
         "max_price": preco_maximo,
         "potential_adjustment": ajuste_potencial,
+        "participants_count": participants_count,
+        "valid_competitors_count": valid_competitors_count,
+        "ignored_competitors_count": ignored_competitors_count,
+        "run_status": run_status_final,
     }
 
     # ── 4. Deduplicação ───────────────────────────────────────────────────

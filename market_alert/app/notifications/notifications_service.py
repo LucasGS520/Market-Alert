@@ -186,6 +186,26 @@ async def send_notification(
             evento=payload.event_type,
             comparison_id=str(payload.comparison_id) if payload.comparison_id else None,
         )
+        # Evento detectado mas sem canais; registra skipped para auditabilidade completa
+        log = NotificationLog(
+            monitored_id=payload.monitored_id,
+            comparison_id=payload.comparison_id,
+            event_type=payload.event_type,
+            channel=None,
+            delivery_status="skipped",
+            message=mensagem,
+            title=titulo,
+            attempt_count=1,
+            old_price=payload.old_price,
+            new_price=payload.new_price,
+            old_status=payload.old_status,
+            new_status=payload.new_status,
+            run_id=payload.run_id,
+            run_status=payload.run_status,
+            participants_count=payload.participants_count,
+        )
+        session.add(log)
+        await session.commit()
         return
 
     logger.info(

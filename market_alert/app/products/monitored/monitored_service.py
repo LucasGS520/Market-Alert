@@ -231,11 +231,9 @@ async def collect_product(
                 product.is_available = False
                 product.consecutive_failures = 0
                 new_stability = classify_stability(
-                    consecutive_unchanged=product.consecutive_unchanged or 0,
+                    last_price_changed_at=product.last_price_changed_at,
                     last_availability_changed_at=product.last_availability_changed_at,
                     now=now,
-                    unstable_threshold=settings.consecutive_unchanged_threshold,
-                    very_stable_threshold=settings.consecutive_unchanged_threshold * 5,
                 )
                 product.stability_level = new_stability
                 next_dt, delay = compute_next_check(
@@ -330,7 +328,6 @@ async def collect_product(
                 product.name = resultado.title
 
             if preco_mudou:
-                product.consecutive_unchanged = 0
                 if preco_anterior is None:
                     product.last_price_changed_at = now
                 elif is_significant_change(float(preco_anterior), float(novo_preco), settings.price_stability_change_threshold_percent):
@@ -339,18 +336,15 @@ async def collect_product(
                     product.last_significant_price_change_percent = delta_pct
                 razao: CheckReason = "success_price_changed"
             else:
-                product.consecutive_unchanged = (product.consecutive_unchanged or 0) + 1
                 razao = "success_price_unchanged"
 
             if disponibilidade_mudou_para_ativa:
                 product.last_availability_changed_at = now
 
             new_stability = classify_stability(
-                consecutive_unchanged=product.consecutive_unchanged,
+                last_price_changed_at=product.last_price_changed_at,
                 last_availability_changed_at=product.last_availability_changed_at,
                 now=now,
-                unstable_threshold=settings.consecutive_unchanged_threshold,
-                very_stable_threshold=settings.consecutive_unchanged_threshold * 5,
             )
             product.stability_level = new_stability
             next_dt, delay = compute_next_check(
@@ -413,11 +407,9 @@ async def collect_product(
             product.consecutive_failures = 0
 
             new_stability = classify_stability(
-                consecutive_unchanged=product.consecutive_unchanged or 0,
+                last_price_changed_at=product.last_price_changed_at,
                 last_availability_changed_at=product.last_availability_changed_at,
                 now=now,
-                unstable_threshold=settings.consecutive_unchanged_threshold,
-                very_stable_threshold=settings.consecutive_unchanged_threshold * 5,
             )
             product.stability_level = new_stability
             next_dt, delay = compute_next_check(

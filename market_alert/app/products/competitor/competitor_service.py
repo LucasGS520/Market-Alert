@@ -133,6 +133,7 @@ async def collect_competitor(
             url=competitor.url_original,
         )
 
+        previous_is_available = competitor.is_available
         try:
             resultado = await scraper.parse(competitor.url_original)
         except ScraperUnavailableError as exc:
@@ -162,10 +163,11 @@ async def collect_competitor(
             competitor.last_checked_at = now
 
             if cls.status == "unavailable":
+                availability_changed = previous_is_available is not False
                 competitor.status = "unavailable"
                 competitor.is_available = False
                 await session.commit()
-                return {"success": False, "reason": "unavailable", "retryable": False}
+                return {"success": False, "reason": "unavailable", "retryable": False, "availability_changed": availability_changed}
 
             if cls.status == "unsupported":
                 competitor.status = "unsupported"
@@ -234,6 +236,7 @@ async def collect_competitor(
                 )
                 session.add(historico)
 
+            availability_changed = previous_is_available is not False
             competitor.status = "unavailable"
             competitor.is_available = False
             competitor.last_checked_at = now
@@ -245,7 +248,7 @@ async def collect_competitor(
                 concorrente_id=str(competitor.id),
                 duracao_s=round(time.monotonic() - inicio, 2),
             )
-            return {"success": False, "reason": "unavailable"}
+            return {"success": False, "reason": "unavailable", "availability_changed": availability_changed}
 
     finally:
         release_lock(redis, chave_lock)

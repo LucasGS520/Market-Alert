@@ -38,7 +38,7 @@ class NotificationLog(Base):
         UUID(as_uuid=True), ForeignKey("comparisons.id", ondelete="SET NULL"), nullable=True
     )
     event_type: Mapped[str] = mapped_column(EventType, nullable=False)
-    channel: Mapped[str] = mapped_column(ChannelType, nullable=False)
+    channel: Mapped[str | None] = mapped_column(ChannelType, nullable=True)
     delivery_status: Mapped[str] = mapped_column(DeliveryStatus, nullable=False)
     message: Mapped[str] = mapped_column(Text, nullable=False)
     title: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -96,6 +96,12 @@ async def add_competitor(
     except Exception as exc:
         logger.warning("enfileiramento_falhou", concorrente_id=str(concorrente.id), erro=str(exc))
 
+    try:
+        from app.workers.tasks import comparison_task
+        comparison_task.delay(monitored_id=str(monitored_id))
+    except Exception as exc:
+        logger.warning("recalculo_falhou", monitored_id=str(monitored_id), erro=str(exc))
+
     return concorrente
 
 

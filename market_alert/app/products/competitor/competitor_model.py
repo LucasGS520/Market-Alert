@@ -41,5 +41,6 @@ class Competitor(Base):
         "MonitoredProduct", back_populates="competitors"
     )
     price_history: Mapped[list["PriceHistory"]] = relationship(  # noqa: F821
-        "PriceHistory", back_populates="competitor"
+        "PriceHistory", back_populates="competitor",
+        cascade="all, delete-orphan", passive_deletes=True,
     )

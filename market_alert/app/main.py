@@ -11,6 +11,7 @@ Swagger UI disponível em: http://localhost:8000/docs
 """
 
 from contextlib import asynccontextmanager
+import logging
 
 import structlog
 from fastapi import FastAPI, HTTPException, Request
@@ -24,6 +25,20 @@ from app.infra.database import AsyncSessionLocal, configure_orm_mappers, engine
 logger = structlog.get_logger()
 
 
+class HealthcheckAccessFilter(logging.Filter):
+    """Evita poluição de log removendo apenas requests de /health no access log."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return "GET /health" not in record.getMessage()
+
+
+def configure_access_log_filter() -> None:
+    access_logger = logging.getLogger("uvicorn.access")
+    if any(isinstance(f, HealthcheckAccessFilter) for f in access_logger.filters):
+        return
+    access_logger.addFilter(HealthcheckAccessFilter())
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
@@ -33,6 +48,7 @@ async def lifespan(app: FastAPI):
     shutdown: encerra o pool de conexões com o banco de forma limpa
     """
     logger.info("market_alert_iniciando")
+    configure_access_log_filter()
     configure_orm_mappers()
     yield
     # Fecha todas as conexões do pool ao desligar o servidor

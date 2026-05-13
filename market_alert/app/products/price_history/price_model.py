@@ -24,10 +24,10 @@ class PriceHistory(Base):
     )
 
     monitored_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("monitored_products.id", ondelete="SET NULL"), nullable=True
+        UUID(as_uuid=True), ForeignKey("monitored_products.id", ondelete="CASCADE"), nullable=True
     )
     competitor_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("competitors.id", ondelete="SET NULL"), nullable=True
+        UUID(as_uuid=True), ForeignKey("competitors.id", ondelete="CASCADE"), nullable=True
     )
 
     price: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)

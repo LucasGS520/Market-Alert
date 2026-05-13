@@ -22,6 +22,9 @@ from celery import Celery
 from celery.schedules import crontab
 
 from app.infra.config import settings
+from app.infra.database import configure_orm_mappers
+
+configure_orm_mappers()
 
 celery_app = Celery("market_alert")
 

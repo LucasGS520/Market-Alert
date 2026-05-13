@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 from decimal import Decimal
 
@@ -45,9 +46,9 @@ class ScraperParseError(Exception):
 
 
 class ScraperClient:
-    def __init__(self, base_url: str | None = None, timeout: float = 30.0) -> None:
+    def __init__(self, base_url: str | None = None, timeout: float | None = None) -> None:
         self.base_url = (base_url or settings.scraper_url).rstrip("/")
-        self.timeout = timeout
+        self.timeout = timeout or settings.scraper_timeout_seconds
 
     async def parse(self, url: str) -> ScraperResult:
         async with httpx.AsyncClient(timeout=self.timeout) as client:
@@ -63,16 +64,21 @@ class ScraperClient:
 
             if response.status_code == 422:
                 data = response.json()
-                try:
-                    error_result = ScraperErrorResult(**data)
-                except Exception:
-                    error_result = ScraperErrorResult(
-                        error_code="PRICE_NOT_FOUND",
-                        marketplace="unknown",
-                        url=url,
-                        retryable=True,
-                        message=data.get("detail", "Não foi possível extrair dados da URL"),
-                    )
+                payload = data.get("detail", data) if isinstance(data, dict) else data
+                if not isinstance(payload, dict):
+                    payload = {"message": payload}
+
+                message = payload.get("message", "Não foi possível extrair dados da URL")
+                if not isinstance(message, str):
+                    message = json.dumps(message, ensure_ascii=False)
+
+                error_result = ScraperErrorResult(
+                    error_code=str(payload.get("error_code", "PRICE_NOT_FOUND")),
+                    marketplace=str(payload.get("marketplace", "unknown")),
+                    url=str(payload.get("url", url)),
+                    retryable=bool(payload.get("retryable", True)),
+                    message=message,
+                )
                 raise ScraperParseError(error_result)
 
             if response.status_code != 200:

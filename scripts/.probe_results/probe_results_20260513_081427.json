@@ -1,0 +1,105 @@
+{
+  "timestamp": "2026-05-13T08:12:56.403592",
+  "total_results": 3,
+  "results": [
+    {
+      "url": "https://produto.mercadolivre.com.br/MLB-1036222520-farol-siena-2008-2009-palio-2011-2010-g4-strada-10-11-reto-_JM",
+      "marketplace": "mercadolivre",
+      "timestamp": "2026-05-13T08:13:33.116921",
+      "elapsed_seconds": 36.71327495574951,
+      "success": false,
+      "error_code": "REDIRECT",
+      "collection": {
+        "final_url": "https://www.mercadolivre.com.br/MLB-1036222520-farol-siena-2008-2009-palio-2011-2010-g4-strada-10-11-reto-_JM",
+        "status_code": 404,
+        "blocked": false,
+        "captcha_detected": false,
+        "html_length": 9158,
+        "payload_count": 0,
+        "error": null
+      },
+      "extraction": "REDIRECT",
+      "diagnosis": {
+        "status": "failed",
+        "cause": "REDIRECIONAMENTO_NAO_PRODUTO",
+        "recommendations": [
+          "Página parece ser de busca/recomendação, não de produto único"
+        ]
+      }
+    },
+    {
+      "url": "https://www.mercadolivre.com.br/par-farol-palio-siena-strada-2008-09-10-11-12-13-14/up/MLBU1750851241#polycard_client=recommendations_vip-pads-up&wid=MLB4880075862&sid=recos&reco_backend=recomm_platform_base_pads_rfa_marketplace&reco_model=rk_ent_v2_retsys_ads&reco_client=vip-pads-up&reco_item_pos=1&reco_backend_type=low_level&reco_id=17c33681-0661-40bf-956e-f65ac976bc08&is_advertising=true&ad_domain=VIPDESKTOP_UP&ad_position=2&ad_click_id=ZDNjZGM2ZDItNGZlNS00ZjJjLTkwZDMtZjRmMDBjYWQ3Y2Qx",
+      "marketplace": "mercadolivre",
+      "timestamp": "2026-05-13T08:13:57.230010",
+      "elapsed_seconds": 16.08798313140869,
+      "success": true,
+      "error_code": null,
+      "collection": {
+        "final_url": "https://www.mercadolivre.com.br/par-farol-palio-siena-strada-2008-09-10-11-12-13-14/up/MLBU1750851241",
+        "status_code": 200,
+        "blocked": false,
+        "captcha_detected": false,
+        "html_length": 964028,
+        "payload_count": 0,
+        "error": null
+      },
+      "extraction": {
+        "marketplace": "mercadolivre",
+        "url": "https://www.mercadolivre.com.br/par-farol-palio-siena-strada-2008-09-10-11-12-13-14/up/MLBU1750851241",
+        "canonical_url": "https://www.mercadolivre.com.br/par-farol-palio-siena-strada-2008-09-10-11-12-13-14/up/MLBU1750851241",
+        "title": "Par Farol Palio Siena Strada 2008 09 10 11 12 13 14",
+        "price": "572.2",
+        "currency": "BRL",
+        "available": true,
+        "seller": "Produtos do Lojas Nova Joia",
+        "product_id": "MLBU1750851241",
+        "thumbnail_url": "https://http2.mlstatic.com/D_NQ_NP_873626-MLB105261622099_012026-O.webp",
+        "extraction_method": "ssr_state",
+        "confidence": 0.92,
+        "collected_at": "2026-05-13T11:13:57.225625Z"
+      },
+      "diagnosis": {
+        "status": "success",
+        "cause": null,
+        "recommendations": []
+      }
+    },
+    {
+      "url": "https://www.mercadolivre.com.br/par-farol-palio-siena-strada-2008-09-10-11-12-13-14/up/MLBU3723585857#polycard_client=recommendations_vip-pads-up&wid=MLB4418812805&sid=recos&reco_backend=recomm_platform_base_pads_rfa_marketplace&reco_model=rk_ent_v2_retsys_ads&reco_client=vip-pads-up&reco_item_pos=2&reco_backend_type=low_level&reco_id=8a80cd17-dd7e-4a7a-ad2f-9afbd6426345&is_advertising=true&ad_domain=VIPDESKTOP_UP&ad_position=3&ad_click_id=YmZjMDc5YWYtM2IzYy00MzMwLWIwMGItZTNhMGJkNjk2M2Ez",
+      "marketplace": "mercadolivre",
+      "timestamp": "2026-05-13T08:14:17.981906",
+      "elapsed_seconds": 12.732822179794312,
+      "success": true,
+      "error_code": null,
+      "collection": {
+        "final_url": "https://www.mercadolivre.com.br/par-farol-palio-siena-strada-2008-09-10-11-12-13-14/up/MLBU3723585857",
+        "status_code": 200,
+        "blocked": false,
+        "captcha_detected": false,
+        "html_length": 860918,
+        "payload_count": 0,
+        "error": null
+      },
+      "extraction": {
+        "marketplace": "mercadolivre",
+        "url": "https://www.mercadolivre.com.br/par-farol-palio-siena-strada-2008-09-10-11-12-13-14/up/MLBU3723585857",
+        "canonical_url": "https://www.mercadolivre.com.br/par-farol-palio-siena-strada-2008-09-10-11-12-13-14/up/MLBU3723585857",
+        "title": "Par Farol Palio Siena Strada 2008 09 10 11 12 13 14",
+        "price": "592.82",
+        "currency": "BRL",
+        "available": true,
+        "seller": "Produtos do vendedor",
+        "product_id": "MLBU3723585857",
+        "thumbnail_url": "https://http2.mlstatic.com/D_NQ_NP_695954-MLB107244042505_022026-O.webp",
+        "extraction_method": "ssr_state",
+        "confidence": 0.92,
+        "collected_at": "2026-05-13T11:14:17.976356Z"
+      },
+      "diagnosis": {
+        "status": "success",
+        "cause": null,
+        "recommendations": []
+      }
+    }
+  ]
+}

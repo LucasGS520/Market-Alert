@@ -24,10 +24,12 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # 1. Novos valores do enum (ADD VALUE não é transacional no PG < 12; executa fora do bloco DDL)
-    op.execute("ALTER TYPE product_status ADD VALUE IF NOT EXISTS 'pending'")
-    op.execute("ALTER TYPE product_status ADD VALUE IF NOT EXISTS 'unsupported'")
-    op.execute("ALTER TYPE product_status ADD VALUE IF NOT EXISTS 'unavailable'")
+    # 1. Novos valores do enum. O PostgreSQL exige commit antes de usar
+    # valores recem-adicionados como default em ALTER TABLE.
+    with op.get_context().autocommit_block():
+        op.execute("ALTER TYPE product_status ADD VALUE IF NOT EXISTS 'pending'")
+        op.execute("ALTER TYPE product_status ADD VALUE IF NOT EXISTS 'unsupported'")
+        op.execute("ALTER TYPE product_status ADD VALUE IF NOT EXISTS 'unavailable'")
 
     # 2. monitored_products ────────────────────────────────────────────────────
     # Renomeia url → url_original

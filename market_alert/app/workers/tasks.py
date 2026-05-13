@@ -21,11 +21,10 @@ Tarefas Celery — processamento assíncrono em background.
 
 Nota sobre async dentro do Celery:
     O Celery é síncrono por natureza. Para chamar funções async dos serviços,
-    usamos asyncio.run() dentro de cada task — isso cria um event loop
-    temporário por execução de tarefa.
+    usamos run_async_task() dentro de cada task. Ele cria um event loop
+    temporário e descarta conexões async no mesmo loop da execução.
 """
 
-import asyncio
 import time
 import uuid
 from decimal import Decimal
@@ -41,6 +40,7 @@ from app.products.competitor.competitor_model import Competitor
 from app.products.competitor.competitor_service import collect_competitor
 from app.products.monitored.monitored_model import MonitoredProduct
 from app.products.monitored.monitored_service import collect_product
+from app.workers.async_utils import run_async_task
 from app.workers.celery_app import celery_app
 from app.workers.collection_run import get_status, mark_deferred, mark_done, mark_failed, mark_skipped
 from app.workers.redis import get_redis
@@ -201,7 +201,7 @@ def collector_task(
                     duracao_s=round(time.monotonic() - inicio, 2),
                 )
 
-    asyncio.run(_executar())
+    run_async_task(_executar)
 
 
 @celery_app.task(
@@ -246,6 +246,7 @@ def comparison_task(
         run_status = rodada_status
 
     async def _executar():
+        nonlocal old_price, new_price
         async with AsyncSessionLocal() as session:
             from app.comparison.comparison_model import Comparison
             from app.infra.config import settings as _settings
@@ -324,7 +325,7 @@ def comparison_task(
                             run_status=run_status,
                         )
 
-    asyncio.run(_executar())
+    run_async_task(_executar)
 
 
 @celery_app.task(
@@ -402,7 +403,7 @@ def notification_task(
             await send_notification(session, redis, payload, product_name, product_url)
 
     try:
-        asyncio.run(_executar())
+        run_async_task(_executar)
     except RetryableDeliveryError as exc:
         logger.warning(
             "notification_task_retry",
@@ -439,7 +440,7 @@ def scheduler_task() -> None:
             async with AsyncSessionLocal() as session:
                 return await run_scheduler(session, redis)
 
-        resultado = asyncio.run(_executar())
+        resultado = run_async_task(_executar)
 
         logger.info(
             "scheduler_rodou",

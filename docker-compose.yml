@@ -59,13 +59,31 @@ services:
       - "8000:8000"
     networks:
       - market_net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    depends_on:
+      redis:
+        condition: service_healthy
+      market_alert_migrate:
+        condition: service_completed_successfully
+    volumes:
+      - ./market_alert/app:/app/app
+
+  market_alert_migrate:
+    build:
+      context: ./market_alert
+      dockerfile: Dockerfile
+    command: alembic upgrade head
+    env_file: .env
+    networks:
+      - market_net
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
-        condition: service_healthy
-    volumes:
-      - ./market_alert/app:/app/app
 
   market_alert_collection_worker:
     build:
@@ -80,10 +98,10 @@ services:
     networks:
       - market_net
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
+      market_alert_migrate:
+        condition: service_completed_successfully
       market_scraper:
         condition: service_healthy
 
@@ -100,10 +118,10 @@ services:
     networks:
       - market_net
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
+      market_alert_migrate:
+        condition: service_completed_successfully
 
   market_alert_beat:
     build:
@@ -112,13 +130,15 @@ services:
     command: >
       celery -A app.workers.celery_app beat
       --loglevel=info
-      --scheduler=celery.schedulers.PersistentScheduler
+      --scheduler=celery.beat.PersistentScheduler
     env_file: .env
     networks:
       - market_net
     depends_on:
       redis:
         condition: service_healthy
+      market_alert_migrate:
+        condition: service_completed_successfully
 
 networks:
   market_net:

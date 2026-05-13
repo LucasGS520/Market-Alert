@@ -13,6 +13,7 @@ class Settings(BaseSettings):
 
     # ── Serviço de Scraping ────────────────────────────────────────────────
     scraper_url: str = "http://market_scraper:8001"
+    scraper_timeout_seconds: float = 90.0
 
     # ── Notificações ───────────────────────────────────────────────────────
     ntfy_url: str = "https://ntfy.sh"

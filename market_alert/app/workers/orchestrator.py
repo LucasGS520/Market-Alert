@@ -11,7 +11,6 @@ Responsável por coordenar a sequência completa:
 Separada do collector_task, que fica responsável pela coleta unitária.
 """
 
-import asyncio
 import time
 import uuid
 from datetime import datetime, timezone
@@ -26,6 +25,7 @@ from app.infra.database import AsyncSessionLocal
 from app.products.competitor.competitor_model import Competitor
 from app.products.monitored.monitored_model import MonitoredProduct
 from app.products.monitored.monitored_service import collect_product
+from app.workers.async_utils import run_async_task
 from app.workers.celery_app import celery_app
 from app.workers.collection_run import start_run
 from app.workers.redis import get_redis
@@ -166,4 +166,4 @@ def collection_orchestrator_task(self: Task, product_id: str) -> None:
                 duracao_s=round(time.monotonic() - inicio, 2),
             )
 
-    asyncio.run(_executar())
+    run_async_task(_executar)

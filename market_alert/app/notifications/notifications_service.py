@@ -13,13 +13,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.infra.config import settings
 from app.infra.clients.ntfy import send_ntfy
 from app.notifications.notifications_model import NotificationLog
-from app.workers.redis import set_cooldown
+from app.workers.redis import is_in_cooldown, set_cooldown
 
 logger = structlog.get_logger()
 
 
 class RetryableDeliveryError(Exception):
     """Propagada por send_notification quando o envio falhou com erro retryable."""
+
+
+_EVENTOS_TIER2 = frozenset({
+    "market_price_drop", "market_price_rise",
+    "competitor_unavailable", "competitor_available",
+})
+
+
+def _fmt_preco(v: Decimal | None) -> str:
+    return f"R$ {v:.2f}" if v is not None else "R$ ?"
 
 
 @dataclass
@@ -61,16 +71,18 @@ def _montar_mensagem(
     """Retorna (titulo, mensagem) para o evento dado."""
     if evento == "price_drop":
         titulo = f"Queda de preço — {nome_produto}"
-        mensagem = f"Preço caiu de R$ {old_price:.2f} para R$ {new_price:.2f}\n{url_original}"
+        mensagem = f"Preço caiu de {_fmt_preco(old_price)} para {_fmt_preco(new_price)}\n{url_original}"
     elif evento == "price_rise":
         titulo = f"Alta de preço — {nome_produto}"
-        mensagem = f"Preço subiu de R$ {old_price:.2f} para R$ {new_price:.2f}\n{url_original}"
+        mensagem = f"Preço subiu de {_fmt_preco(old_price)} para {_fmt_preco(new_price)}\n{url_original}"
     elif evento == "status_change":
         titulo = f"Mudança de status — {nome_produto}"
         mensagem = f"Status mudou de '{old_status}' para '{new_status}'\n{url_original}"
     elif evento == "ranking_change":
         titulo = f"Mudança de ranking — {nome_produto}"
-        mensagem = f"Posição no mercado: {old_ranking}º → {new_ranking}º\n{url_original}"
+        old_r = f"{old_ranking}º" if old_ranking is not None else "?"
+        new_r = f"{new_ranking}º" if new_ranking is not None else "?"
+        mensagem = f"Posição no mercado: {old_r} → {new_r}\n{url_original}"
     elif evento == "product_unavailable":
         titulo = f"Produto indisponível — {nome_produto}"
         mensagem = f"O produto ficou indisponível.\n{url_original}"
@@ -79,10 +91,10 @@ def _montar_mensagem(
         mensagem = f"O produto voltou a ficar disponível.\n{url_original}"
     elif evento == "market_price_drop":
         titulo = f"Concorrente mais barato — {nome_produto}"
-        mensagem = f"Menor preço de mercado caiu de R$ {old_price:.2f} para R$ {new_price:.2f}\n{url_original}"
+        mensagem = f"Menor preço de mercado caiu de {_fmt_preco(old_price)} para {_fmt_preco(new_price)}\n{url_original}"
     elif evento == "market_price_rise":
         titulo = f"Mercado ficou mais caro — {nome_produto}"
-        mensagem = f"Menor preço de mercado subiu de R$ {old_price:.2f} para R$ {new_price:.2f}\n{url_original}"
+        mensagem = f"Menor preço de mercado subiu de {_fmt_preco(old_price)} para {_fmt_preco(new_price)}\n{url_original}"
     elif evento == "competitor_unavailable":
         nome_comp = competitor_name or "Concorrente"
         titulo = f"Concorrente indisponível — {nome_produto}"
@@ -104,9 +116,14 @@ def _registrar_tentativa(
     mensagem: str,
     falhou: bool,
     erro: str | None,
-) -> None:
-    """Adiciona um NotificationLog à sessão — um registro por tentativa de entrega."""
+) -> uuid.UUID:
+    """Adiciona um NotificationLog à sessão — um registro por tentativa de entrega.
+
+    Retorna o UUID pré-gerado para uso em logs antes do commit.
+    """
+    log_id = uuid.uuid4()
     log = NotificationLog(
+        id=log_id,
         monitored_id=payload.monitored_id,
         comparison_id=payload.comparison_id,
         event_type=payload.event_type,
@@ -127,6 +144,7 @@ def _registrar_tentativa(
         participants_count=payload.participants_count,
     )
     session.add(log)
+    return log_id
 
 
 def _is_permanent_dns_failure(exc: httpx.ConnectError) -> bool:
@@ -186,6 +204,23 @@ async def send_notification(
     Raises:
         RetryableDeliveryError: se o envio falhou com erro retryable.
     """
+    if not settings.ntfy_topic:
+        logger.debug(
+            "notificacao_ignorada_ntfy_desabilitado",
+            produto_id=str(payload.monitored_id),
+            evento=payload.event_type,
+        )
+        return
+
+    if is_in_cooldown(redis, payload.monitored_id, payload.event_type, payload.competitor_id):
+        logger.debug(
+            "notificacao_cooldown_ativo",
+            produto_id=str(payload.monitored_id),
+            evento=payload.event_type,
+            competitor_id=str(payload.competitor_id) if payload.competitor_id else None,
+        )
+        return
+
     nome_produto = product_name or product_url
     titulo, mensagem = _montar_mensagem(
         payload.event_type, nome_produto, product_url,
@@ -214,15 +249,15 @@ async def send_notification(
     try:
         await send_ntfy(settings.ntfy_url, settings.ntfy_topic, titulo, mensagem)
 
+        log_id = _registrar_tentativa(session, payload, titulo, mensagem, falhou=False, erro=None)
+        await session.commit()
         logger.info(
             "notificacao_enviada",
+            notification_id=str(log_id),
             produto_id=str(payload.monitored_id),
             evento=payload.event_type,
             comparison_id=str(payload.comparison_id) if payload.comparison_id else None,
         )
-        _registrar_tentativa(session, payload, titulo, mensagem, falhou=False, erro=None)
-        await session.commit()
-        _EVENTOS_TIER2 = {"market_price_drop", "market_price_rise", "competitor_unavailable", "competitor_available"}
         ttl_minutes = (
             settings.competitor_cooldown_minutes
             if payload.event_type in _EVENTOS_TIER2
@@ -237,16 +272,20 @@ async def send_notification(
             "notificacao_cooldown_definido",
             produto_id=str(payload.monitored_id),
             evento=payload.event_type,
+            competitor_id=str(payload.competitor_id) if payload.competitor_id else None,
+            ttl_minutes=ttl_minutes or settings.notification_cooldown_minutes,
         )
 
     except Exception as exc:
         retryable = _is_retryable(exc)
         erro = str(exc)
+        status_http = exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None
         logger.warning(
             "notificacao_falhou",
             produto_id=str(payload.monitored_id),
             comparison_id=str(payload.comparison_id) if payload.comparison_id else None,
             retryable=retryable,
+            status_http=status_http,
             erro=erro,
         )
         _registrar_tentativa(session, payload, titulo, mensagem, falhou=True, erro=erro)
@@ -264,6 +303,7 @@ async def list_notifications(
     delivery_status: str | None = None,
     date_from: datetime | None = None,
     date_to: datetime | None = None,
+    competitor_id: uuid.UUID | None = None,
     limit: int = 50,
 ) -> list[NotificationLog]:
     stmt = select(NotificationLog).order_by(NotificationLog.sent_at.desc())
@@ -277,6 +317,8 @@ async def list_notifications(
         stmt = stmt.where(NotificationLog.sent_at >= date_from)
     if date_to is not None:
         stmt = stmt.where(NotificationLog.sent_at <= date_to)
+    if competitor_id is not None:
+        stmt = stmt.where(NotificationLog.competitor_id == competitor_id)
     stmt = stmt.limit(limit)
     result = await session.execute(stmt)
     return list(result.scalars().all())

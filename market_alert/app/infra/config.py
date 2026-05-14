@@ -22,8 +22,13 @@ class Settings(BaseSettings):
 
     # ── Regras de Negócio de Notificação ──────────────────────────────────
     notification_delta_percent: float = 5.0
-    notification_cooldown_minutes: int = 30       # tier 1: produto monitorado
-    competitor_cooldown_minutes: int = 60         # tier 2: mercado / concorrentes
+    # Tier 1 (price_drop/rise, status_change, ranking_change, product_available/unavailable):
+    # janela de silêncio por produto+evento para evitar spam em oscilações frequentes.
+    notification_cooldown_minutes: int = 30
+    # Tier 2 (market_price_drop/rise, competitor_available/unavailable):
+    # janela maior pois eventos de mercado costumam ser mais voláteis.
+    # A chave inclui competitor_id para que cada concorrente tenha cooldown independente.
+    competitor_cooldown_minutes: int = 60
 
     # ── Regras de Comparação ───────────────────────────────────────────────
     status_threshold_competitive: float = 1.0   # % acima do mínimo → ainda "competitive"

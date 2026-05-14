@@ -113,8 +113,24 @@ services:
     command: >
       celery -A app.workers.celery_app worker
       --loglevel=info
-      --queues=comparison,default,notification
+      --queues=comparison,default
       --concurrency=4
+    env_file: .env
+    networks:
+      - market_net
+    depends_on:
+      redis:
+        condition: service_healthy
+      market_alert_migrate:
+        condition: service_completed_successfully
+
+  market_alert_notification_worker:
+    image: market_alert:local
+    command: >
+      celery -A app.workers.celery_app worker
+      --loglevel=info
+      --queues=notification
+      --concurrency=2
     env_file: .env
     networks:
       - market_net

@@ -134,28 +134,25 @@ def collector_task(
                     duracao_s=round(time.monotonic() - inicio, 2),
                 )
 
-                from app.infra.config import settings as _cfg
                 curr_available = produto.is_available
-                if _cfg.ntfy_topic and prev_available != curr_available:
-                    from app.workers.redis import is_in_cooldown as _in_cd
+                if prev_available != curr_available:
                     evento_disp = "product_available" if curr_available else "product_unavailable"
-                    if not _in_cd(redis, pid, evento_disp):
-                        notification_task.delay(
-                            monitored_id=str(pid),
-                            comparison_id=None,
-                            event_type=evento_disp,
-                            old_price=None,
-                            new_price=None,
-                            old_status=None,
-                            new_status=None,
-                            product_url=produto.url_original,
-                            product_name=produto.name,
-                        )
-                        logger.info(
-                            "notificacao_disponibilidade_enfileirada",
-                            produto_id=str(pid),
-                            evento=evento_disp,
-                        )
+                    notification_task.delay(
+                        monitored_id=str(pid),
+                        comparison_id=None,
+                        event_type=evento_disp,
+                        old_price=None,
+                        new_price=None,
+                        old_status=None,
+                        new_status=None,
+                        product_url=produto.url_original,
+                        product_name=produto.name,
+                    )
+                    logger.info(
+                        "notificacao_disponibilidade_enfileirada",
+                        produto_id=str(pid),
+                        evento=evento_disp,
+                    )
 
             # ── Coleta de concorrente ───────────────────────────────────────
             elif competitor_id:
@@ -221,31 +218,27 @@ def collector_task(
 
                 # Evento de disponibilidade de concorrente
                 if resultado.get("availability_changed"):
-                    from app.infra.config import settings as _cfg
-                    from app.workers.redis import is_in_cooldown as _in_cd
-                    if _cfg.ntfy_topic:
-                        evento_comp = "competitor_available" if concorrente.is_available else "competitor_unavailable"
-                        if not _in_cd(redis, concorrente.monitored_id, evento_comp, competitor_id=cid):
-                            produto_mon = await session.get(MonitoredProduct, concorrente.monitored_id)
-                            if produto_mon:
-                                notification_task.delay(
-                                    monitored_id=monitored_id_str,
-                                    comparison_id=None,
-                                    event_type=evento_comp,
-                                    old_price=None,
-                                    new_price=None,
-                                    old_status=None,
-                                    new_status=None,
-                                    competitor_id=str(cid),
-                                    competitor_name=concorrente.name,
-                                    product_url=produto_mon.url_original,
-                                    product_name=produto_mon.name,
-                                )
-                                logger.info(
-                                    "notificacao_disponibilidade_concorrente_enfileirada",
-                                    concorrente_id=competitor_id,
-                                    evento=evento_comp,
-                                )
+                    evento_comp = "competitor_available" if concorrente.is_available else "competitor_unavailable"
+                    produto_mon = await session.get(MonitoredProduct, concorrente.monitored_id)
+                    if produto_mon:
+                        notification_task.delay(
+                            monitored_id=monitored_id_str,
+                            comparison_id=None,
+                            event_type=evento_comp,
+                            old_price=None,
+                            new_price=None,
+                            old_status=None,
+                            new_status=None,
+                            competitor_id=str(cid),
+                            competitor_name=concorrente.name,
+                            product_url=produto_mon.url_original,
+                            product_name=produto_mon.name,
+                        )
+                        logger.info(
+                            "notificacao_disponibilidade_concorrente_enfileirada",
+                            concorrente_id=competitor_id,
+                            evento=evento_comp,
+                        )
 
                 logger.info(
                     "collector_task_concluido",
@@ -305,7 +298,6 @@ def comparison_task(
         async with AsyncSessionLocal() as session:
             from app.comparison.comparison_model import Comparison
             from app.infra.config import settings as _settings
-            from app.workers.redis import is_in_cooldown
 
             mid = uuid.UUID(monitored_id)
 
@@ -360,31 +352,14 @@ def comparison_task(
                                 market_old = str(min_ant)
                                 market_new = str(min_nov)
 
-                    if _settings.ntfy_topic is None:
-                        logger.debug(
-                            "notificacao_ignorada_ntfy_desabilitado",
-                            produto_id=str(mid),
-                            run_id=run_id,
-                        )
-                        return
-
-                    # (evento, ep_old, ep_new, rank_old, rank_new, cooldown_minutes)
                     _eventos = [
-                        (evento_preco, old_price, new_price, None, None, _settings.notification_cooldown_minutes),
-                        (evento_status, None, None, None, None, _settings.notification_cooldown_minutes),
-                        (evento_ranking, None, None, rank_old, rank_new, _settings.notification_cooldown_minutes),
-                        (evento_mercado, market_old, market_new, None, None, _settings.competitor_cooldown_minutes),
+                        (evento_preco, old_price, new_price, None, None),
+                        (evento_status, None, None, None, None),
+                        (evento_ranking, None, None, rank_old, rank_new),
+                        (evento_mercado, market_old, market_new, None, None),
                     ]
-                    for evento, ep_old, ep_new, r_old, r_new, cooldown_ttl in _eventos:
+                    for evento, ep_old, ep_new, r_old, r_new in _eventos:
                         if not evento:
-                            continue
-                        if is_in_cooldown(redis, mid, evento):
-                            logger.debug(
-                                "notificacao_cooldown_ativo",
-                                produto_id=str(mid),
-                                evento=evento,
-                                run_status=run_status,
-                            )
                             continue
                         notification_task.delay(
                             monitored_id=str(mid),

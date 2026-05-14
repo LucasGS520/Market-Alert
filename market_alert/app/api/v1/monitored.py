@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infra.database import get_session
 from app.comparison.comparison_schemas import ComparisonRead
+
 from app.products.monitored.monitored_model import MonitoredProduct
 from app.products.monitored.monitored_schemas import (
     MonitoredProductCreate,
@@ -21,6 +22,8 @@ from app.products.monitored.monitored_service import (
     pause_product,
     resume_product,
 )
+from app.api.v1.schemas import CreatedWithTask
+from app.scheduling.scheduler_service import enqueue_with_lease
 
 logger = structlog.get_logger()
 
@@ -29,18 +32,11 @@ router = APIRouter(prefix="/monitored", tags=["monitored"])
 Session = Annotated[AsyncSession, Depends(get_session)]
 
 
-@router.post("/scrape", response_model=MonitoredProductRead, status_code=status.HTTP_202_ACCEPTED)
-async def create_and_scrape(body: MonitoredProductCreate, session: Session) -> MonitoredProduct:
+@router.post("/", response_model=CreatedWithTask[MonitoredProductRead], status_code=status.HTTP_202_ACCEPTED)
+async def create_monitored(body: MonitoredProductCreate, session: Session) -> CreatedWithTask[MonitoredProductRead]:
     produto = await create_product(session, str(body.url), body.name)
-
-    try:
-        from app.workers.tasks import collector_task
-        tarefa = collector_task.delay(product_id=str(produto.id))
-        logger.info("coleta_enfileirada", produto_id=str(produto.id), tarefa_id=tarefa.id)
-    except Exception as exc:
-        logger.warning("enfileiramento_falhou", produto_id=str(produto.id), erro=str(exc))
-
-    return produto
+    task_id = await enqueue_with_lease(session, produto.id)
+    return CreatedWithTask(data=MonitoredProductRead.model_validate(produto), task_id=task_id)
 
 
 @router.get("/", response_model=list[MonitoredProductRead])
@@ -65,7 +61,17 @@ async def pause_monitored(product_id: uuid.UUID, session: Session) -> MonitoredP
 
 @router.patch("/{product_id}/resume", response_model=MonitoredProductRead)
 async def resume_monitored(product_id: uuid.UUID, session: Session) -> MonitoredProduct:
-    return await resume_product(session, product_id)
+    produto = await resume_product(session, product_id)
+    try:
+        from app.scheduling.scheduler_service import enqueue_with_lease
+        tarefa_id = await enqueue_with_lease(session, produto.id)
+        if tarefa_id:
+            logger.info("coleta_enfileirada_apos_resume", produto_id=str(produto.id), tarefa_id=tarefa_id)
+        else:
+            logger.info("coleta_pulada_lease_ativo_apos_resume", produto_id=str(produto.id))
+    except Exception as exc:
+        logger.warning("enfileiramento_falhou_apos_resume", produto_id=str(produto.id), erro=str(exc))
+    return produto
 
 
 @router.delete("/{product_id}", status_code=status.HTTP_204_NO_CONTENT)

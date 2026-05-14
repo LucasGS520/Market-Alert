@@ -106,7 +106,7 @@ class MercadoLivreAdapter(MarketplaceAdapter):
 
         if _is_search_page(sel):
             return ScrapeError(
-                error_code=ErrorCode.REDIRECT,
+                error_code=ErrorCode.REDIRECT_TO_SEARCH,
                 marketplace=self.marketplace,
                 url=page.url,
                 retryable=False,
@@ -170,6 +170,16 @@ class MercadoLivreAdapter(MarketplaceAdapter):
                 confidence_min=conf_min,
             )
 
+        canonical = _extract_canonical(sel)
+
+        original_url_normalized = _normalize_ml_url(page.url)
+        if canonical and canonical.rstrip("/") != original_url_normalized.rstrip("/"):
+            logger.info(
+                "ml_url_redirecionada",
+                url_original=page.url,
+                canonical_url=canonical,
+            )
+
         logger.info(
             "ml_extracao_sucesso",
             url=page.url,
@@ -183,7 +193,7 @@ class MercadoLivreAdapter(MarketplaceAdapter):
         return ScrapeResult(
             marketplace=self.marketplace,
             url=page.url,
-            canonical_url=_extract_canonical(sel),
+            canonical_url=canonical,
             title=title,
             price=price,
             currency="BRL",

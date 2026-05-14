@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 import structlog
@@ -26,44 +27,164 @@ def _calcular_status(preco_produto: Decimal, preco_minimo: Decimal) -> str:
     return "urgent"
 
 
+def _snapshot_identico(anterior: Comparison, novo: dict) -> bool:
+    """Retorna True se os indicadores competitivos do snapshot são idênticos.
+
+    Inclui metadados de composição para evitar supressão quando o conjunto
+    de concorrentes muda (participants_count, valid/ignored counts, run_status).
+    """
+    return (
+        anterior.status == novo["status"]
+        and anterior.ranking == novo["ranking"]
+        and Decimal(str(anterior.average_price)) == novo["average_price"]
+        and Decimal(str(anterior.min_price)) == novo["min_price"]
+        and Decimal(str(anterior.max_price)) == novo["max_price"]
+        and (
+            (anterior.potential_adjustment is None and novo["potential_adjustment"] is None)
+            or (
+                anterior.potential_adjustment is not None
+                and novo["potential_adjustment"] is not None
+                and Decimal(str(anterior.potential_adjustment)) == novo["potential_adjustment"]
+            )
+        )
+        and anterior.participants_count == novo["participants_count"]
+        and anterior.valid_competitors_count == novo["valid_competitors_count"]
+        and anterior.ignored_competitors_count == novo["ignored_competitors_count"]
+        and anterior.run_status == novo["run_status"]
+    )
+
+
 async def calculate_comparison(
     session: AsyncSession,
     redis: Redis,
     monitored_id: uuid.UUID,
+    run_id: str | None = None,
+    run_status: str | None = None,
 ) -> Comparison | None:
+    """Calcula e persiste um snapshot competitivo para o produto monitorado.
+
+    Retorna None sem persistir se o produto principal for inelegível.
+    Retorna None sem persistir se o snapshot for idêntico ao anterior dentro
+    da janela de deduplicação.
+    """
+    # ── 1. Validar produto principal ──────────────────────────────────────
     produto = await session.get(MonitoredProduct, monitored_id)
-    if not produto or produto.current_price is None:
-        logger.warning(
-            "comparacao_abortada_produto_sem_preco",
+
+    if not produto:
+        logger.warning("comparacao_abortada", produto_id=str(monitored_id), razao="produto_nao_encontrado")
+        return None
+
+    if produto.current_price is None:
+        logger.warning("comparacao_abortada", produto_id=str(monitored_id), razao="produto_sem_preco")
+        return None
+
+    if produto.status != "active":
+        logger.info(
+            "comparacao_abortada",
             produto_id=str(monitored_id),
-            razao="produto_sem_preco_atual",
+            razao="produto_status_inativo",
+            status=produto.status,
         )
         return None
 
+    if not produto.is_available:
+        logger.info("comparacao_abortada", produto_id=str(monitored_id), razao="produto_indisponivel")
+        return None
+
+    # ── 2. Buscar e classificar concorrentes ──────────────────────────────
     resultado = await session.execute(
         select(Competitor).where(Competitor.monitored_id == monitored_id)
     )
-    concorrentes = list(resultado.scalars().all())
+    todos_concorrentes = list(resultado.scalars().all())
 
-    # Tuplas (preco, indice_original) garantem tie-breaking determinístico por ordem de inserção
-    entradas: list[tuple[Decimal, int]] = [(Decimal(str(produto.current_price)), 0)]
-    for i, c in enumerate(concorrentes, 1):
-        if c.current_price is not None:
-            entradas.append((Decimal(str(c.current_price)), i))
+    elegíveis: list[Competitor] = []
+    ignorados: list[Competitor] = []
+
+    for c in todos_concorrentes:
+        if (
+            c.status == "active"
+            and c.is_available is True
+            and c.current_price is not None
+            and Decimal(str(c.current_price)) > 0
+        ):
+            elegíveis.append(c)
         else:
-            logger.info("concorrente_excluido_sem_preco", concorrente_id=str(c.id))
+            ignorados.append(c)
+            logger.debug(
+                "concorrente_ignorado",
+                concorrente_id=str(c.id),
+                status=c.status,
+                is_available=c.is_available,
+                current_price=str(c.current_price) if c.current_price is not None else None,
+            )
+
+    valid_competitors_count = len(elegíveis)
+    ignored_competitors_count = len(ignorados)
+
+    # run_status: sem concorrentes válidos substitui qualquer estado da rodada
+    if valid_competitors_count == 0:
+        run_status_final = "no_competitors"
+    elif run_status is not None:
+        run_status_final = run_status
+    else:
+        run_status_final = "manual"
+
+    # ── 3. Montar entradas para cálculo ───────────────────────────────────
+    # Tuplas (preco, indice_original) garantem tie-breaking determinístico
+    preco_produto = Decimal(str(produto.current_price))
+    entradas: list[tuple[Decimal, int]] = [(preco_produto, 0)]
+    for i, c in enumerate(elegíveis, 1):
+        entradas.append((Decimal(str(c.current_price)), i))
 
     entradas_ordenadas = sorted(entradas, key=lambda x: (x[0], x[1]))
     todos_precos = [p for p, _ in entradas_ordenadas]
 
-    preco_produto = Decimal(str(produto.current_price))
     ranking = next(i + 1 for i, (_, idx) in enumerate(entradas_ordenadas) if idx == 0)
     preco_medio = sum(todos_precos) / len(todos_precos)
     preco_minimo = todos_precos[0]
     preco_maximo = todos_precos[-1]
     status = _calcular_status(preco_produto, preco_minimo)
     ajuste_potencial = preco_produto - preco_minimo if preco_produto > preco_minimo else None
+    participants_count = len(entradas)
 
+    novo_snapshot = {
+        "status": status,
+        "ranking": ranking,
+        "average_price": preco_medio,
+        "min_price": preco_minimo,
+        "max_price": preco_maximo,
+        "potential_adjustment": ajuste_potencial,
+        "participants_count": participants_count,
+        "valid_competitors_count": valid_competitors_count,
+        "ignored_competitors_count": ignored_competitors_count,
+        "run_status": run_status_final,
+    }
+
+    # ── 4. Deduplicação ───────────────────────────────────────────────────
+    anterior = await session.scalar(
+        select(Comparison)
+        .where(Comparison.monitored_id == monitored_id)
+        .order_by(Comparison.calculated_at.desc())
+        .limit(1)
+    )
+
+    if anterior is not None and _snapshot_identico(anterior, novo_snapshot):
+        janela = timedelta(minutes=settings.comparison_dedup_window_minutes)
+        agora = datetime.now(timezone.utc)
+        calculado_em = anterior.calculated_at
+        if calculado_em.tzinfo is None:
+            calculado_em = calculado_em.replace(tzinfo=timezone.utc)
+        if agora - calculado_em < janela:
+            logger.info(
+                "comparacao_deduplicada",
+                produto_id=str(monitored_id),
+                anterior_id=str(anterior.id),
+                run_id=run_id,
+                run_status=run_status_final,
+            )
+            return None
+
+    # ── 5. Persistir snapshot ─────────────────────────────────────────────
     comparacao = Comparison(
         monitored_id=monitored_id,
         status=status,
@@ -72,6 +193,12 @@ async def calculate_comparison(
         min_price=preco_minimo,
         max_price=preco_maximo,
         potential_adjustment=ajuste_potencial,
+        run_id=run_id,
+        run_status=run_status_final,
+        product_price=preco_produto,
+        participants_count=participants_count,
+        valid_competitors_count=valid_competitors_count,
+        ignored_competitors_count=ignored_competitors_count,
     )
     session.add(comparacao)
     await session.commit()
@@ -86,7 +213,11 @@ async def calculate_comparison(
         ranking=ranking,
         preco_minimo=str(preco_minimo),
         preco_produto=str(preco_produto),
-        total_precos=len(todos_precos),
+        participants_count=participants_count,
+        valid_competitors_count=valid_competitors_count,
+        ignored_competitors_count=ignored_competitors_count,
+        run_id=run_id,
+        run_status=run_status_final,
     )
     return comparacao
 

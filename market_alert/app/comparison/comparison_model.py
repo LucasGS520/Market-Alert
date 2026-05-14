@@ -1,13 +1,17 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, Numeric, func, text
+from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, Numeric, String, func, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.infra.database import Base
 
 ComparisonStatus = Enum("competitive", "attention", "urgent", name="comparison_status")
+RunStatus = Enum(
+    "complete", "partial", "expired", "no_competitors", "manual",
+    name="run_status",
+)
 
 
 class Comparison(Base):
@@ -34,6 +38,14 @@ class Comparison(Base):
     calculated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+
+    # Campos de auditoria da rodada (adicionados na migration 006)
+    run_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    run_status: Mapped[str | None] = mapped_column(RunStatus, nullable=True)
+    product_price: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
+    participants_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    valid_competitors_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    ignored_competitors_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     monitored_product: Mapped["MonitoredProduct"] = relationship(  # noqa: F821
         "MonitoredProduct", back_populates="comparisons"

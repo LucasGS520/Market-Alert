@@ -11,9 +11,10 @@ services:
       - market_net
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U market -d market_alert"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
+      interval: 2s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
     ports:
       - "5432:5432"
 
@@ -26,9 +27,10 @@ services:
       - market_net
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
+      interval: 2s
       timeout: 3s
-      retries: 10
+      retries: 15
+      start_period: 2s
     ports:
       - "6379:6379"
 
@@ -38,18 +40,22 @@ services:
       dockerfile: Dockerfile
     command: uvicorn app.main:app --host 0.0.0.0 --port 8001
     env_file: .env
+    shm_size: "1gb"
     ports:
       - "8001:8001"
     networks:
       - market_net
+    volumes:
+      - scraper_session_state:/app/.session_state
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8001/health || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://localhost:8001/ready || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 72
       start_period: 30s
 
   market_alert_api:
+    image: market_alert:local
     build:
       context: ./market_alert
       dockerfile: Dockerfile
@@ -59,38 +65,51 @@ services:
       - "8000:8000"
     networks:
       - market_net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 15s
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
+      market_alert_migrate:
+        condition: service_completed_successfully
     volumes:
       - ./market_alert/app:/app/app
 
-  market_alert_collection_worker:
-    build:
-      context: ./market_alert
-      dockerfile: Dockerfile
-    command: >
-      celery -A app.workers.celery_app worker
-      --loglevel=info
-      --queues=collection
-      --concurrency=2
+  market_alert_migrate:
+    image: market_alert:local
+    command: alembic upgrade head
     env_file: .env
     networks:
       - market_net
     depends_on:
       postgres:
         condition: service_healthy
+
+  market_alert_collection_worker:
+    image: market_alert:local
+    command: >
+      celery -A app.workers.celery_app worker
+      --loglevel=info
+      --queues=collection
+      --concurrency=1
+      --prefetch-multiplier=1
+    env_file: .env
+    networks:
+      - market_net
+    depends_on:
       redis:
         condition: service_healthy
+      market_alert_migrate:
+        condition: service_completed_successfully
       market_scraper:
         condition: service_healthy
 
   market_alert_comparison_worker:
-    build:
-      context: ./market_alert
-      dockerfile: Dockerfile
+    image: market_alert:local
     command: >
       celery -A app.workers.celery_app worker
       --loglevel=info
@@ -100,25 +119,41 @@ services:
     networks:
       - market_net
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
+      market_alert_migrate:
+        condition: service_completed_successfully
 
-  market_alert_beat:
-    build:
-      context: ./market_alert
-      dockerfile: Dockerfile
+  market_alert_notification_worker:
+    image: market_alert:local
     command: >
-      celery -A app.workers.celery_app beat
+      celery -A app.workers.celery_app worker
       --loglevel=info
-      --scheduler=celery.schedulers.PersistentScheduler
+      --queues=notification
+      --concurrency=2
     env_file: .env
     networks:
       - market_net
     depends_on:
       redis:
         condition: service_healthy
+      market_alert_migrate:
+        condition: service_completed_successfully
+
+  market_alert_beat:
+    image: market_alert:local
+    command: >
+      celery -A app.workers.celery_app beat
+      --loglevel=info
+      --scheduler=celery.beat.PersistentScheduler
+    env_file: .env
+    networks:
+      - market_net
+    depends_on:
+      redis:
+        condition: service_healthy
+      market_alert_migrate:
+        condition: service_completed_successfully
 
 networks:
   market_net:
@@ -127,3 +162,4 @@ networks:
 volumes:
   postgres_data:
   redis_data:
+  scraper_session_state:

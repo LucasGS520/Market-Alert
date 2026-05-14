@@ -21,7 +21,14 @@ class Settings(BaseSettings):
     request_timeout_seconds: int = 15
 
     # Timeout para operações do Playwright (navegação + condição de espera)
-    playwright_timeout_ms: int = 30000
+    playwright_timeout_ms: int = 60000
+
+    # Timeout global por requisição /scraper/parse (deve ser < scraper_timeout_seconds do caller).
+    # Garante que o scraper responde antes do caller desistir, evitando trabalho órfão.
+    max_total_request_seconds: int = 240
+
+    # Intervalo entre tentativas de inicializar o Chromium em background.
+    browser_startup_retry_seconds: int = 30
 
     # Número máximo de payloads de rede interceptados por requisição
     max_intercepted_payloads: int = 10

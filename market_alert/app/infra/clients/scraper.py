@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 from decimal import Decimal
 
@@ -44,10 +45,28 @@ class ScraperParseError(Exception):
         super().__init__(error_result.message)
 
 
+def _build_error_result(payload: object, url: str) -> ScraperErrorResult | None:
+    data = payload.get("detail", payload) if isinstance(payload, dict) else payload
+    if not isinstance(data, dict) or "error_code" not in data:
+        return None
+
+    message = data.get("message", "Nao foi possivel extrair dados da URL")
+    if not isinstance(message, str):
+        message = json.dumps(message, ensure_ascii=False)
+
+    return ScraperErrorResult(
+        error_code=str(data.get("error_code", "PRICE_NOT_FOUND")),
+        marketplace=str(data.get("marketplace", "unknown")),
+        url=str(data.get("url", url)),
+        retryable=bool(data.get("retryable", True)),
+        message=message,
+    )
+
+
 class ScraperClient:
-    def __init__(self, base_url: str | None = None, timeout: float = 30.0) -> None:
+    def __init__(self, base_url: str | None = None, timeout: float | None = None) -> None:
         self.base_url = (base_url or settings.scraper_url).rstrip("/")
-        self.timeout = timeout
+        self.timeout = timeout or settings.scraper_timeout_seconds
 
     async def parse(self, url: str) -> ScraperResult:
         async with httpx.AsyncClient(timeout=self.timeout) as client:
@@ -57,22 +76,18 @@ class ScraperClient:
                     json={"url": url},
                 )
             except httpx.ConnectError as exc:
-                raise ScraperUnavailableError(f"Scraper inacessível: {exc}") from exc
+                raise ScraperUnavailableError(f"Scraper inacessivel: {exc}") from exc
             except httpx.TimeoutException as exc:
                 raise ScraperUnavailableError(f"Timeout ao chamar scraper: {exc}") from exc
 
-            if response.status_code == 422:
-                data = response.json()
+            if response.status_code in (422, 504):
                 try:
-                    error_result = ScraperErrorResult(**data)
-                except Exception:
-                    error_result = ScraperErrorResult(
-                        error_code="PRICE_NOT_FOUND",
-                        marketplace="unknown",
-                        url=url,
-                        retryable=True,
-                        message=data.get("detail", "Não foi possível extrair dados da URL"),
-                    )
+                    payload = response.json()
+                except ValueError as exc:
+                    raise ScraperUnavailableError(f"Scraper retornou HTTP {response.status_code}") from exc
+                error_result = _build_error_result(payload, url)
+                if error_result is None:
+                    raise ScraperUnavailableError(f"Scraper retornou HTTP {response.status_code}")
                 raise ScraperParseError(error_result)
 
             if response.status_code != 200:

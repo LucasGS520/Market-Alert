@@ -1,5 +1,6 @@
+import time
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from decimal import Decimal
 from urllib.parse import urlparse
 
@@ -10,24 +11,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infra.clients.scraper import ScraperClient, ScraperParseError, ScraperUnavailableError
-from app.infra.scraper_errors import ERROS_BLOQUEIO
+from app.infra.scraper_errors import classify_scraper_error
 from app.products.monitored.monitored_model import MonitoredProduct
 from app.products.price_history.price_model import PriceHistory
+from app.scheduling.policy import CheckReason, classify_stability, compute_next_check, is_significant_change
 from app.workers.redis import acquire_lock, check_rate_limit, release_lock, set_domain_cooldown
 
 logger = structlog.get_logger()
-
-# ── Scheduling ─────────────────────────────────────────────────────────────────
-
-
-def compute_next_interval(current_interval: int, price_changed: bool, consecutive_unchanged: int) -> int:
-    from app.infra.config import settings
-
-    if price_changed:
-        return max(settings.min_check_interval_minutes, current_interval // 2)
-    if consecutive_unchanged >= settings.consecutive_unchanged_threshold:
-        return min(settings.max_check_interval_minutes, current_interval * 2)
-    return current_interval
 
 
 # ── CRUD ────────────────────────────────────────────────────────────────────────
@@ -40,11 +30,22 @@ async def list_products(session: AsyncSession) -> list[MonitoredProduct]:
 
 
 async def create_product(session: AsyncSession, url: str, name: str | None) -> MonitoredProduct:
-    existente = await session.scalar(select(MonitoredProduct).where(MonitoredProduct.url == url))
+    from app.products.url_utils import normalize_url
+
+    url_normalized = normalize_url(url)
+    existente = await session.scalar(
+        select(MonitoredProduct).where(MonitoredProduct.url_normalized == url_normalized)
+    )
     if existente:
         raise HTTPException(status_code=409, detail="Esta URL já está sendo monitorada")
 
-    produto = MonitoredProduct(url=url, name=name)
+    produto = MonitoredProduct(
+        url_original=url,
+        url_normalized=url_normalized,
+        name=name,
+        status="pending",
+        next_check_at=datetime.now(timezone.utc),
+    )
     session.add(produto)
     await session.commit()
     await session.refresh(produto)
@@ -105,105 +106,382 @@ async def collect_product(
     redis: Redis,
     scraper: ScraperClient,
     product: MonitoredProduct,
-) -> PriceHistory | None:
+) -> dict:
+    """Coleta preço do produto monitorado.
+
+    Returns:
+        dict com chave "success" (bool) e campos adicionais por resultado.
+    Raises:
+        ScraperUnavailableError: scraper inacessível — Celery deve retentar.
+        ScraperParseError: erro retryable do scraper — Celery deve retentar.
+    """
+    from app.infra.config import settings
+
+    inicio = time.monotonic()
+
+    if product.status in ("paused", "unsupported"):
+        logger.info("coleta_ignorada_status", produto_id=str(product.id), status=product.status)
+        return {"success": False, "reason": "ineligible_status"}
+
     chave_lock = f"lock:collect:{product.id}"
-    if not acquire_lock(redis, chave_lock):
+    lock_token = acquire_lock(redis, chave_lock, timeout=300)
+    if not lock_token:
+        now = datetime.now(timezone.utc)
         logger.info("coleta_pulada_lock_ativo", produto_id=str(product.id))
-        return None
+        next_dt, delay = compute_next_check(
+            reason="lock_busy",
+            now=now,
+            stability_level=product.stability_level,
+            last_scheduled_delay_minutes=product.last_scheduled_delay_minutes,
+            consecutive_failures=product.consecutive_failures or 0,
+            base_backoff_minutes=settings.collection_retry_base_delay_minutes,
+            max_backoff_minutes=settings.collection_retry_max_delay_minutes,
+            rate_limit_min=settings.rate_limit_reschedule_min_minutes,
+            rate_limit_max=settings.rate_limit_reschedule_max_minutes,
+            lock_busy_min=settings.lock_busy_reschedule_min_minutes,
+            lock_busy_max=settings.lock_busy_reschedule_max_minutes,
+        )
+        product.next_check_at = next_dt
+        product.last_scheduled_delay_minutes = delay
+        product.next_check_reason = "lock_busy"
+        await session.commit()
+        return {"success": False, "reason": "lock_busy"}
+
+    logger.info("lock_adquirido", produto_id=str(product.id))
 
     try:
-        dominio = urlparse(product.url).netloc
+        dominio = urlparse(product.url_original).netloc
         if not check_rate_limit(redis, dominio):
-            logger.info("coleta_rate_limited", dominio=dominio, produto_id=str(product.id))
-            return None
+            now = datetime.now(timezone.utc)
+            logger.info(
+                "coleta_rate_limited",
+                dominio=dominio,
+                produto_id=str(product.id),
+                ttl_s=settings.domain_rate_limit_ttl_seconds,
+            )
+            next_dt, delay = compute_next_check(
+                reason="rate_limited",
+                now=now,
+                stability_level=product.stability_level,
+                last_scheduled_delay_minutes=product.last_scheduled_delay_minutes,
+                consecutive_failures=product.consecutive_failures or 0,
+                base_backoff_minutes=settings.collection_retry_base_delay_minutes,
+                max_backoff_minutes=settings.collection_retry_max_delay_minutes,
+                rate_limit_min=settings.rate_limit_reschedule_min_minutes,
+                rate_limit_max=settings.rate_limit_reschedule_max_minutes,
+                lock_busy_min=settings.lock_busy_reschedule_min_minutes,
+                lock_busy_max=settings.lock_busy_reschedule_max_minutes,
+            )
+            product.next_check_at = next_dt
+            product.last_scheduled_delay_minutes = delay
+            product.next_check_reason = "rate_limited"
+            await session.commit()
+            return {"success": False, "reason": "rate_limited"}
+
+        logger.info(
+            "iniciando_coleta",
+            produto_id=str(product.id),
+            url=product.url_original,
+        )
 
         try:
-            resultado = await scraper.parse(product.url)
+            resultado = await scraper.parse(product.url_original)
         except ScraperUnavailableError as exc:
-            logger.warning("scraper_indisponivel", produto_id=str(product.id), erro=str(exc))
+            now = datetime.now(timezone.utc)
+            logger.warning(
+                "scraper_indisponivel",
+                produto_id=str(product.id),
+                erro=str(exc),
+                scraper_timeout_s=settings.scraper_timeout_seconds,
+            )
             product.status = "error"
+            product.last_checked_at = now
+            product.consecutive_failures = (product.consecutive_failures or 0) + 1
+            next_dt, delay = compute_next_check(
+                reason="error_backoff",
+                now=now,
+                stability_level=product.stability_level,
+                last_scheduled_delay_minutes=product.last_scheduled_delay_minutes,
+                consecutive_failures=product.consecutive_failures,
+                base_backoff_minutes=settings.collection_retry_base_delay_minutes,
+                max_backoff_minutes=settings.collection_retry_max_delay_minutes,
+                rate_limit_min=settings.rate_limit_reschedule_min_minutes,
+                rate_limit_max=settings.rate_limit_reschedule_max_minutes,
+                lock_busy_min=settings.lock_busy_reschedule_min_minutes,
+                lock_busy_max=settings.lock_busy_reschedule_max_minutes,
+            )
+            product.next_check_at = next_dt
+            product.last_scheduled_delay_minutes = delay
+            product.next_check_reason = "error_backoff"
             await session.commit()
             raise
         except ScraperParseError as exc:
             error_code = exc.error_result.error_code
+            cls = classify_scraper_error(error_code)
+            now = datetime.now(timezone.utc)
+
             logger.warning(
                 "scraper_erro_semantico",
                 produto_id=str(product.id),
                 error_code=error_code,
-                retryable=exc.error_result.retryable,
+                status_resultante=cls.status,
+                acao=cls.action,
+                domain_cooldown=cls.domain_cooldown,
                 marketplace=exc.error_result.marketplace,
             )
-            if error_code == "UNAVAILABLE":
-                product.is_available = False
-                product.last_checked_at = datetime.now(timezone.utc)
-                proximo_intervalo = compute_next_interval(
-                    current_interval=product.check_interval_minutes,
-                    price_changed=False,
-                    consecutive_unchanged=(product.consecutive_unchanged or 0) + 1,
-                )
-                product.check_interval_minutes = proximo_intervalo
-                product.next_check_at = datetime.now(timezone.utc) + timedelta(minutes=proximo_intervalo)
-                await session.commit()
-                return None
-            if error_code in ERROS_BLOQUEIO:
+
+            if cls.domain_cooldown:
                 set_domain_cooldown(redis, dominio)
+
+            product.last_checked_at = now
+
+            if cls.status == "unavailable":
+                if product.is_available:
+                    product.last_availability_changed_at = now
+                product.status = "unavailable"
+                product.is_available = False
+                product.consecutive_failures = 0
+                new_stability = classify_stability(
+                    last_price_changed_at=product.last_price_changed_at,
+                    last_availability_changed_at=product.last_availability_changed_at,
+                    now=now,
+                )
+                product.stability_level = new_stability
+                next_dt, delay = compute_next_check(
+                    reason="unavailable",
+                    now=now,
+                    stability_level=new_stability,
+                    last_scheduled_delay_minutes=product.last_scheduled_delay_minutes,
+                    consecutive_failures=0,
+                    base_backoff_minutes=settings.collection_retry_base_delay_minutes,
+                    max_backoff_minutes=settings.collection_retry_max_delay_minutes,
+                    rate_limit_min=settings.rate_limit_reschedule_min_minutes,
+                    rate_limit_max=settings.rate_limit_reschedule_max_minutes,
+                    lock_busy_min=settings.lock_busy_reschedule_min_minutes,
+                    lock_busy_max=settings.lock_busy_reschedule_max_minutes,
+                )
+                product.check_interval_minutes = delay or product.check_interval_minutes
+                product.last_scheduled_delay_minutes = delay
+                product.next_check_at = next_dt
+                product.next_check_reason = "unavailable"
+                await session.commit()
+                logger.info(
+                    "produto_indisponivel_por_erro",
+                    produto_id=str(product.id),
+                    error_code=error_code,
+                    stability_level=new_stability,
+                    proximo_intervalo_min=delay,
+                )
+                return {"success": False, "reason": "unavailable", "retryable": False}
+
+            if cls.status == "unsupported":
+                product.status = "unsupported"
+                product.next_check_at = None
+                product.next_check_reason = "unsupported"
+                await session.commit()
+                logger.info("produto_nao_suportado", produto_id=str(product.id), error_code=error_code)
+                return {"success": False, "reason": "unsupported", "retryable": False}
+
+            # status == "error" — backoff exponencial por consecutive_failures, re-raise para Celery retry
             product.status = "error"
+            product.consecutive_failures = (product.consecutive_failures or 0) + 1
+            next_dt, delay = compute_next_check(
+                reason="error_backoff",
+                now=now,
+                stability_level=product.stability_level,
+                last_scheduled_delay_minutes=product.last_scheduled_delay_minutes,
+                consecutive_failures=product.consecutive_failures,
+                base_backoff_minutes=settings.collection_retry_base_delay_minutes,
+                max_backoff_minutes=settings.collection_retry_max_delay_minutes,
+                rate_limit_min=settings.rate_limit_reschedule_min_minutes,
+                rate_limit_max=settings.rate_limit_reschedule_max_minutes,
+                lock_busy_min=settings.lock_busy_reschedule_min_minutes,
+                lock_busy_max=settings.lock_busy_reschedule_max_minutes,
+            )
+            product.next_check_at = next_dt
+            product.last_scheduled_delay_minutes = delay
+            product.next_check_reason = "error_backoff"
             await session.commit()
             raise
 
+        # ── Sucesso do scraper ──────────────────────────────────────────────────
+        now = datetime.now(timezone.utc)
         novo_preco = resultado.price
-        preco_anterior = Decimal(str(product.current_price)) if product.current_price is not None else None
-        preco_mudou = preco_anterior is None or novo_preco != preco_anterior
 
-        historico = PriceHistory(
-            monitored_id=product.id,
-            price=novo_preco,
-            is_available=resultado.available,
-            title=resultado.title,
-            seller=resultado.seller,
-            currency=resultado.currency,
-            extraction_method=resultado.extraction_method,
-            confidence=resultado.confidence,
-            thumbnail_url=resultado.thumbnail_url,
-            canonical_url=resultado.canonical_url,
-            product_id=resultado.product_id,
-        )
-        session.add(historico)
+        if resultado.available and novo_preco is not None and novo_preco > 0:
+            # Coleta bem-sucedida: produto disponível com preço válido
+            preco_anterior = Decimal(str(product.current_price)) if product.current_price is not None else None
+            preco_mudou = preco_anterior is None or novo_preco != preco_anterior
 
-        product.current_price = float(novo_preco)
-        product.is_available = resultado.available
-        product.last_checked_at = datetime.now(timezone.utc)
-        product.status = "active"
+            historico = PriceHistory(
+                monitored_id=product.id,
+                price=novo_preco,
+                is_available=True,
+                title=resultado.title,
+                seller=resultado.seller,
+                currency=resultado.currency,
+                extraction_method=resultado.extraction_method,
+                confidence=resultado.confidence,
+                thumbnail_url=resultado.thumbnail_url,
+                canonical_url=resultado.canonical_url,
+                product_id=resultado.product_id,
+            )
+            session.add(historico)
 
-        if resultado.title and not product.name:
-            product.name = resultado.title
+            disponibilidade_mudou_para_ativa = product.is_available is False
+            product.current_price = float(novo_preco)
+            product.is_available = True
+            product.status = "active"
+            product.last_checked_at = now
+            product.consecutive_failures = 0
 
-        if preco_mudou:
-            product.consecutive_unchanged = 0
+            if resultado.title and not product.name:
+                product.name = resultado.title
+
+            if preco_mudou:
+                if preco_anterior is None:
+                    product.last_price_changed_at = now
+                elif is_significant_change(float(preco_anterior), float(novo_preco), settings.price_stability_change_threshold_percent):
+                    delta_pct = abs(float(novo_preco) - float(preco_anterior)) / float(preco_anterior) * 100
+                    product.last_price_changed_at = now
+                    product.last_significant_price_change_percent = delta_pct
+                razao: CheckReason = "success_price_changed"
+            else:
+                razao = "success_price_unchanged"
+
+            if disponibilidade_mudou_para_ativa:
+                product.last_availability_changed_at = now
+
+            new_stability = classify_stability(
+                last_price_changed_at=product.last_price_changed_at,
+                last_availability_changed_at=product.last_availability_changed_at,
+                now=now,
+            )
+            product.stability_level = new_stability
+            next_dt, delay = compute_next_check(
+                reason=razao,
+                now=now,
+                stability_level=new_stability,
+                last_scheduled_delay_minutes=product.last_scheduled_delay_minutes,
+                consecutive_failures=0,
+                base_backoff_minutes=settings.collection_retry_base_delay_minutes,
+                max_backoff_minutes=settings.collection_retry_max_delay_minutes,
+                rate_limit_min=settings.rate_limit_reschedule_min_minutes,
+                rate_limit_max=settings.rate_limit_reschedule_max_minutes,
+                lock_busy_min=settings.lock_busy_reschedule_min_minutes,
+                lock_busy_max=settings.lock_busy_reschedule_max_minutes,
+            )
+            product.check_interval_minutes = delay
+            product.last_scheduled_delay_minutes = delay
+            product.next_check_at = next_dt
+            product.next_check_reason = razao
+
+            await session.commit()
+            await session.refresh(historico)
+
+            # Canonicalização persistente: quando o scraper retorna uma canonical_url
+            # confiável diferente da URL armazenada, atualiza o registro para que
+            # próximas coletas já partam da URL canônica e robusta.
+            if resultado.canonical_url and resultado.confidence >= 0.90:
+                from sqlalchemy.exc import IntegrityError
+                from app.products.url_utils import normalize_url
+                canon_normalized = normalize_url(resultado.canonical_url)
+                if canon_normalized != product.url_normalized:
+                    try:
+                        product.url_original = resultado.canonical_url
+                        product.url_normalized = canon_normalized
+                        await session.commit()
+                        logger.info(
+                            "url_canonicalizada",
+                            produto_id=str(product.id),
+                            url_anterior=product.url_normalized,
+                            canonical_url=resultado.canonical_url,
+                        )
+                    except IntegrityError:
+                        await session.rollback()
+                        logger.info(
+                            "url_canonical_conflito",
+                            produto_id=str(product.id),
+                            canonical_url=resultado.canonical_url,
+                        )
+
+            logger.info(
+                "produto_coletado",
+                produto_id=str(product.id),
+                preco=str(novo_preco),
+                preco_mudou=preco_mudou,
+                stability_level=new_stability,
+                proximo_intervalo_min=delay,
+                next_check_reason=razao,
+                extraction_method=resultado.extraction_method,
+                confidence=resultado.confidence,
+                duracao_s=round(time.monotonic() - inicio, 2),
+            )
+            return {"success": True, "price": float(novo_preco), "next_check_at": product.next_check_at}
+
         else:
-            product.consecutive_unchanged = (product.consecutive_unchanged or 0) + 1
+            # Scraper retornou sucesso mas produto está indisponível
+            # Grava histórico com último preço conhecido para não perder a evidência de coleta
+            preco_historico = novo_preco if novo_preco is not None else (
+                Decimal(str(product.current_price)) if product.current_price is not None else None
+            )
+            if preco_historico is not None:
+                historico = PriceHistory(
+                    monitored_id=product.id,
+                    price=preco_historico,
+                    is_available=False,
+                    title=resultado.title,
+                    extraction_method=resultado.extraction_method,
+                    confidence=resultado.confidence,
+                )
+                session.add(historico)
 
-        proximo_intervalo = compute_next_interval(
-            current_interval=product.check_interval_minutes,
-            price_changed=preco_mudou,
-            consecutive_unchanged=product.consecutive_unchanged,
-        )
-        product.check_interval_minutes = proximo_intervalo
-        product.next_check_at = datetime.now(timezone.utc) + timedelta(minutes=proximo_intervalo)
+            if product.is_available:
+                product.last_availability_changed_at = now
+            product.is_available = False
+            product.status = "unavailable"
+            product.last_checked_at = now
+            product.consecutive_failures = 0
 
-        await session.commit()
-        await session.refresh(historico)
+            new_stability = classify_stability(
+                last_price_changed_at=product.last_price_changed_at,
+                last_availability_changed_at=product.last_availability_changed_at,
+                now=now,
+            )
+            product.stability_level = new_stability
+            next_dt, delay = compute_next_check(
+                reason="unavailable",
+                now=now,
+                stability_level=new_stability,
+                last_scheduled_delay_minutes=product.last_scheduled_delay_minutes,
+                consecutive_failures=0,
+                base_backoff_minutes=settings.collection_retry_base_delay_minutes,
+                max_backoff_minutes=settings.collection_retry_max_delay_minutes,
+                rate_limit_min=settings.rate_limit_reschedule_min_minutes,
+                rate_limit_max=settings.rate_limit_reschedule_max_minutes,
+                lock_busy_min=settings.lock_busy_reschedule_min_minutes,
+                lock_busy_max=settings.lock_busy_reschedule_max_minutes,
+            )
+            product.check_interval_minutes = delay or product.check_interval_minutes
+            product.last_scheduled_delay_minutes = delay
+            product.next_check_at = next_dt
+            product.next_check_reason = "unavailable"
 
-        logger.info(
-            "produto_coletado",
-            produto_id=str(product.id),
-            preco=str(novo_preco),
-            preco_mudou=preco_mudou,
-            proximo_intervalo_min=proximo_intervalo,
-            extraction_method=resultado.extraction_method,
-            confidence=resultado.confidence,
-        )
-        return historico
+            await session.commit()
+
+            logger.info(
+                "produto_indisponivel",
+                produto_id=str(product.id),
+                stability_level=new_stability,
+                proximo_intervalo_min=delay,
+                duracao_s=round(time.monotonic() - inicio, 2),
+            )
+            return {"success": False, "reason": "unavailable"}
 
     finally:
-        release_lock(redis, chave_lock)
+        release_lock(redis, chave_lock, lock_token)
+        logger.debug(
+            "lock_liberado",
+            produto_id=str(product.id),
+            duracao_s=round(time.monotonic() - inicio, 2),
+        )

@@ -4,24 +4,42 @@ Configuração do Celery — fila de tarefas assíncronas.
 O Celery processa tarefas em background sem bloquear a API. Neste projeto,
 três tipos de tarefas existem:
 
-    collector_task  → coleta preço de um produto ou concorrente
-    comparison_task → recalcula ranking e status competitivo
-    scheduler_task  → roda a cada 1 minuto via Beat; decide quais produtos coletar
+    collector_task      → coleta preço de um produto ou concorrente
+    comparison_task     → recalcula ranking e status competitivo
+    notification_task   → entrega alerta via ntfy com retry independente
+    scheduler_task      → roda a cada 1 minuto via Beat; decide quais produtos coletar
 
 Filas separadas:
-    collection → tarefas de coleta (podem ser lentas por I/O de rede)
-    comparison → cálculos (rápidos, dependem apenas do banco)
-    default    → scheduler e outras tarefas utilitárias
+    collection   → tarefas de coleta (podem ser lentas por I/O de rede)
+    comparison   → cálculos (rápidos, dependem apenas do banco)
+    notification → entrega de alertas (I/O externo, worker dedicado)
+    default      → scheduler e outras tarefas utilitárias
 
 Por que Redis como broker?
     Já está na stack para locks e cache. Evita adicionar outro serviço
     (como RabbitMQ) para um projeto de escopo local.
 """
 
+import structlog
 from celery import Celery
 from celery.schedules import crontab
+from celery.signals import worker_ready
 
 from app.infra.config import settings
+from app.infra.database import configure_orm_mappers
+
+_logger = structlog.get_logger()
+
+
+@worker_ready.connect
+def _verificar_ntfy_topic(sender=None, **kwargs):
+    if not settings.ntfy_topic:
+        _logger.warning(
+            "ntfy_topic_ausente",
+            mensagem="NTFY_TOPIC não configurado — alertas serão suprimidos silenciosamente",
+        )
+
+configure_orm_mappers()
 
 celery_app = Celery("market_alert")
 
@@ -43,10 +61,15 @@ celery_app.conf.update(
 
     # Roteamento: cada tipo de tarefa vai para a fila correspondente
     task_routes={
+        "app.workers.orchestrator.collection_orchestrator_task": {"queue": "collection"},
         "app.workers.tasks.collector_task": {"queue": "collection"},
         "app.workers.tasks.comparison_task": {"queue": "comparison"},
+        "app.workers.tasks.notification_task": {"queue": "notification"},
         "app.workers.tasks.scheduler_task": {"queue": "default"},
     },
+
+    # Módulos de tarefas além do padrão tasks.py (não cobertos pelo autodiscover)
+    include=["app.workers.orchestrator"],
 
     # Agenda periódica do Beat: roda o scheduler a cada minuto
     beat_schedule={

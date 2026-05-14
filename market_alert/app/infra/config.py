@@ -13,30 +13,53 @@ class Settings(BaseSettings):
 
     # ── Serviço de Scraping ────────────────────────────────────────────────
     scraper_url: str = "http://market_scraper:8001"
+    # Deve ser maior que max_total_request_seconds do market_scraper.
+    scraper_timeout_seconds: float = 270.0
 
     # ── Notificações ───────────────────────────────────────────────────────
     ntfy_url: str = "https://ntfy.sh"
-    ntfy_topic: str = "market_alert"
-    telert_token: str | None = None
+    ntfy_topic: str | None = None
 
     # ── Regras de Negócio de Notificação ──────────────────────────────────
     notification_delta_percent: float = 5.0
+    # Tier 1 (price_drop/rise, status_change, ranking_change, product_available/unavailable):
+    # janela de silêncio por produto+evento para evitar spam em oscilações frequentes.
     notification_cooldown_minutes: int = 30
+    # Tier 2 (market_price_drop/rise, competitor_available/unavailable):
+    # janela maior pois eventos de mercado costumam ser mais voláteis.
+    # A chave inclui competitor_id para que cada concorrente tenha cooldown independente.
+    competitor_cooldown_minutes: int = 60
 
     # ── Regras de Comparação ───────────────────────────────────────────────
-    status_threshold_competitive: float = 5.0   # % acima do mínimo → ainda "competitive"
+    status_threshold_competitive: float = 1.0   # % acima do mínimo → ainda "competitive"
     status_threshold_attention: float = 15.0    # % acima do mínimo → "attention" (acima → "urgent")
+    comparison_dedup_window_minutes: int = 5    # janela de deduplicação de snapshots idênticos
 
     # ── Concorrentes ───────────────────────────────────────────────────────
     max_competitors_per_product: int = 5
 
-    # ── Intervalos de Agendamento ──────────────────────────────────────────
-    min_check_interval_minutes: int = 30
-    max_check_interval_minutes: int = 240
-    consecutive_unchanged_threshold: int = 3
-
     # ── Rate Limiting de Domínio ───────────────────────────────────────────
     domain_captcha_cooldown_seconds: int = 300
+    domain_rate_limit_ttl_seconds: int = 2
+
+    # ── Retry e Backoff de Coleta ──────────────────────────────────────────
+    collection_retry_base_delay_minutes: int = 5
+    collection_retry_max_delay_minutes: int = 60
+    collection_run_timeout_seconds: int = 300  # SLA máximo de uma rodada coordenada
+
+    # ── Política de Estabilidade ───────────────────────────────────────────
+    price_stability_change_threshold_percent: float = 1.0
+
+    # ── Scheduler com Lease ────────────────────────────────────────────────
+    scheduler_batch_size: int = 50
+    scheduler_lock_ttl_seconds: int = 55
+    collection_lease_ttl_seconds: int = 600
+
+    # ── Reagendamento por Motivo ───────────────────────────────────────────
+    rate_limit_reschedule_min_minutes: int = 5
+    rate_limit_reschedule_max_minutes: int = 15
+    lock_busy_reschedule_min_minutes: int = 2
+    lock_busy_reschedule_max_minutes: int = 5
 
     # ── Servidor ───────────────────────────────────────────────────────────
     log_level: str = "INFO"

@@ -184,6 +184,9 @@ class BrowserSession:
         self._browser: Browser | None = None
         self._contexts: dict[str, BrowserContext] = {}
         self._lock = asyncio.Lock()
+        # Serializa navegações por marketplace: impede múltiplas páginas simultâneas
+        # no mesmo contexto, evitando que reset por CAPTCHA mate páginas em andamento.
+        self._semaphores: dict[str, asyncio.Semaphore] = {}
 
     async def start(self) -> None:
         pw = await async_playwright().start()
@@ -265,6 +268,8 @@ class BrowserSession:
 
     async def _get_context(self, marketplace: str) -> BrowserContext:
         async with self._lock:
+            if marketplace not in self._semaphores:
+                self._semaphores[marketplace] = asyncio.Semaphore(1)
             if marketplace not in self._contexts:
                 cfg = _SESSION_CONFIG.get(marketplace, _SESSION_CONFIG["mercadolivre"])
                 cookie_file = self._cookie_path(marketplace)
@@ -308,93 +313,98 @@ class BrowserSession:
         if extra_intercept_patterns:
             patterns.extend(extra_intercept_patterns)
 
-        context = await self._get_context(marketplace)
-        page = await context.new_page()
-        captured_payloads: list[dict] = []
-        blocked = False
-        captcha_detected = False
-        status_code: int | None = None
-        error: str | None = None
+        # Garante que contexto e semáforo existam antes de adquirir o semáforo.
+        await self._get_context(marketplace)
 
-        async def _on_response(response: Response) -> None:
-            resp_url = response.url
-            if not any(re.search(p, resp_url) for p in patterns):
-                return
-            if len(captured_payloads) >= settings.max_intercepted_payloads:
-                return
-            content_type = response.headers.get("content-type", "")
-            if "json" not in content_type:
-                return
+        async with self._semaphores[marketplace]:
+            # Re-fetch: contexto pode ter sido resetado por chamada anterior.
+            context = await self._get_context(marketplace)
+            page = await context.new_page()
+            captured_payloads: list[dict] = []
+            blocked = False
+            captcha_detected = False
+            status_code: int | None = None
+            error: str | None = None
+
+            async def _on_response(response: Response) -> None:
+                resp_url = response.url
+                if not any(re.search(p, resp_url) for p in patterns):
+                    return
+                if len(captured_payloads) >= settings.max_intercepted_payloads:
+                    return
+                content_type = response.headers.get("content-type", "")
+                if "json" not in content_type:
+                    return
+                try:
+                    body = await response.json()
+                    captured_payloads.append({"url": resp_url, "body": body})
+                    logger.debug("payload_capturado", url=resp_url, marketplace=marketplace)
+                except Exception:
+                    pass
+
+            page.on("response", _on_response)
+
             try:
-                body = await response.json()
-                captured_payloads.append({"url": resp_url, "body": body})
-                logger.debug("payload_capturado", url=resp_url, marketplace=marketplace)
-            except Exception:
-                pass
+                referrer = _MARKETPLACE_HOMEPAGES.get(marketplace, "")
+                if referrer:
+                    await page.set_extra_http_headers({"Referer": referrer})
 
-        page.on("response", _on_response)
+                await asyncio.sleep(random.uniform(0.3, 1.5))
 
-        try:
-            referrer = _MARKETPLACE_HOMEPAGES.get(marketplace, "")
-            if referrer:
-                await page.set_extra_http_headers({"Referer": referrer})
+                resp = await page.goto(
+                    url,
+                    timeout=settings.playwright_timeout_ms,
+                    wait_until="commit",
+                )
+                if resp:
+                    status_code = resp.status
+                    if resp.status == 403:
+                        blocked = True
+                        logger.warning("browser_403", url=url, marketplace=marketplace)
 
-            await asyncio.sleep(random.uniform(0.3, 1.5))
+                if not blocked:
+                    await _try_accept_cookies(page)
 
-            resp = await page.goto(
-                url,
-                timeout=settings.playwright_timeout_ms,
-                wait_until="commit",
+                    if wait_condition is not None:
+                        await wait_condition(page)
+                    else:
+                        await page.wait_for_load_state(
+                            "networkidle",
+                            timeout=settings.playwright_timeout_ms,
+                        )
+
+                    await _simulate_human_behavior(page)
+
+                html = await page.content()
+                captcha_detected = detect_captcha(html)
+
+            except Exception as exc:
+                error = str(exc)
+                logger.warning("browser_navegacao_falhou", url=url, marketplace=marketplace, erro=error)
+                html = None
+            finally:
+                await page.close()
+                # Não persiste cookies quando CAPTCHA detectado — a sessão está envenenada
+                cfg_persist = _SESSION_CONFIG.get(marketplace, {})
+                should_persist = cfg_persist.get("persist_session", True)
+                if not captcha_detected and not blocked and should_persist:
+                    await self._save_context_state(marketplace)
+
+            if captcha_detected or blocked:
+                await self.reset_context(marketplace)
+
+            return CollectedPage(
+                url=url,
+                marketplace=marketplace,
+                final_url=page.url,
+                html=html,
+                network_payloads=captured_payloads,
+                rendered=True,
+                blocked=blocked,
+                captcha_detected=captcha_detected,
+                status_code=status_code,
+                error=error,
             )
-            if resp:
-                status_code = resp.status
-                if resp.status == 403:
-                    blocked = True
-                    logger.warning("browser_403", url=url, marketplace=marketplace)
-
-            if not blocked:
-                await _try_accept_cookies(page)
-
-                if wait_condition is not None:
-                    await wait_condition(page)
-                else:
-                    await page.wait_for_load_state(
-                        "networkidle",
-                        timeout=settings.playwright_timeout_ms,
-                    )
-
-                await _simulate_human_behavior(page)
-
-            html = await page.content()
-            captcha_detected = detect_captcha(html)
-
-        except Exception as exc:
-            error = str(exc)
-            logger.warning("browser_navegacao_falhou", url=url, marketplace=marketplace, erro=error)
-            html = None
-        finally:
-            await page.close()
-            # Não persiste cookies quando CAPTCHA detectado — a sessão está envenenada
-            cfg_persist = _SESSION_CONFIG.get(marketplace, {})
-            should_persist = cfg_persist.get("persist_session", True)
-            if not captcha_detected and not blocked and should_persist:
-                await self._save_context_state(marketplace)
-
-        if captcha_detected or blocked:
-            await self.reset_context(marketplace)
-
-        return CollectedPage(
-            url=url,
-            marketplace=marketplace,
-            final_url=page.url,
-            html=html,
-            network_payloads=captured_payloads,
-            rendered=True,
-            blocked=blocked,
-            captcha_detected=captcha_detected,
-            status_code=status_code,
-            error=error,
-        )
 
     async def close_all(self) -> None:
         for marketplace in list(self._contexts):

@@ -44,6 +44,8 @@ services:
       - "8001:8001"
     networks:
       - market_net
+    volumes:
+      - scraper_session_state:/app/.session_state
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8001/health || exit 1"]
       interval: 5s
@@ -92,7 +94,8 @@ services:
       celery -A app.workers.celery_app worker
       --loglevel=info
       --queues=collection
-      --concurrency=2
+      --concurrency=1
+      --prefetch-multiplier=1
     env_file: .env
     networks:
       - market_net
@@ -142,3 +145,4 @@ networks:
 volumes:
   postgres_data:
   redis_data:
+  scraper_session_state:

@@ -1,3 +1,4 @@
+import socket
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
@@ -129,9 +130,23 @@ def _registrar_tentativa(
     session.add(log)
 
 
+def _is_permanent_dns_failure(exc: httpx.ConnectError) -> bool:
+    """Detecta falha DNS permanente (EAI_NONAME = errno -2): host não existe."""
+    cause = exc.__cause__
+    while cause is not None:
+        if isinstance(cause, socket.gaierror) and cause.args[0] == socket.EAI_NONAME:
+            return True
+        cause = getattr(cause, "__cause__", None)
+    return False
+
+
 def _is_retryable(exc: Exception) -> bool:
     """Classifica se a falha de entrega admite nova tentativa."""
-    if isinstance(exc, (httpx.TimeoutException, httpx.ConnectError)):
+    if isinstance(exc, httpx.ConnectError):
+        if _is_permanent_dns_failure(exc):
+            return False
+        return True
+    if isinstance(exc, httpx.TimeoutException):
         return True
     if isinstance(exc, httpx.HTTPStatusError):
         return exc.response.status_code in (429, 500, 502, 503, 504)

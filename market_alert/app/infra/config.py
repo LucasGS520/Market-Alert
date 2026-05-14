@@ -13,7 +13,8 @@ class Settings(BaseSettings):
 
     # ── Serviço de Scraping ────────────────────────────────────────────────
     scraper_url: str = "http://market_scraper:8001"
-    scraper_timeout_seconds: float = 90.0
+    # Deve ser maior que max_total_request_seconds do market_scraper.
+    scraper_timeout_seconds: float = 270.0
 
     # ── Notificações ───────────────────────────────────────────────────────
     ntfy_url: str = "https://ntfy.sh"
@@ -34,6 +35,7 @@ class Settings(BaseSettings):
 
     # ── Rate Limiting de Domínio ───────────────────────────────────────────
     domain_captcha_cooldown_seconds: int = 300
+    domain_rate_limit_ttl_seconds: int = 2
 
     # ── Retry e Backoff de Coleta ──────────────────────────────────────────
     collection_retry_base_delay_minutes: int = 5

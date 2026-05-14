@@ -61,15 +61,18 @@ class MonitoredProduct(Base):
     )
 
     competitors: Mapped[list["Competitor"]] = relationship(  # noqa: F821
-        "Competitor", back_populates="monitored_product", cascade="all, delete-orphan"
+        "Competitor", back_populates="monitored_product",
+        cascade="all, delete-orphan", passive_deletes=True,
     )
     price_history: Mapped[list["PriceHistory"]] = relationship(  # noqa: F821
         "PriceHistory", back_populates="monitored_product",
         cascade="all, delete-orphan", passive_deletes=True,
     )
     comparisons: Mapped[list["Comparison"]] = relationship(  # noqa: F821
-        "Comparison", back_populates="monitored_product", cascade="all, delete-orphan"
+        "Comparison", back_populates="monitored_product",
+        cascade="all, delete-orphan", passive_deletes=True,
     )
     notification_logs: Mapped[list["NotificationLog"]] = relationship(  # noqa: F821
-        "NotificationLog", back_populates="monitored_product", cascade="all, delete-orphan"
+        "NotificationLog", back_populates="monitored_product",
+        cascade="all, delete-orphan", passive_deletes=True,
     )

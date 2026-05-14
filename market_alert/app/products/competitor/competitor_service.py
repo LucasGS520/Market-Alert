@@ -115,7 +115,8 @@ async def collect_competitor(
         return {"success": False, "reason": "ineligible_status"}
 
     chave_lock = f"lock:collect:{competitor.id}"
-    if not acquire_lock(redis, chave_lock, timeout=300):
+    lock_token = acquire_lock(redis, chave_lock, timeout=300)
+    if not lock_token:
         logger.info("coleta_pulada_lock_ativo", concorrente_id=str(competitor.id))
         return {"success": False, "reason": "lock_busy"}
 
@@ -124,7 +125,14 @@ async def collect_competitor(
     try:
         dominio = urlparse(competitor.url_original).netloc
         if not check_rate_limit(redis, dominio):
-            logger.info("coleta_rate_limited", dominio=dominio, concorrente_id=str(competitor.id))
+            from app.infra.config import settings
+
+            logger.info(
+                "coleta_rate_limited",
+                dominio=dominio,
+                concorrente_id=str(competitor.id),
+                ttl_s=settings.domain_rate_limit_ttl_seconds,
+            )
             return {"success": False, "reason": "rate_limited"}
 
         logger.info(
@@ -137,8 +145,15 @@ async def collect_competitor(
         try:
             resultado = await scraper.parse(competitor.url_original)
         except ScraperUnavailableError as exc:
+            from app.infra.config import settings
+
             now = datetime.now(timezone.utc)
-            logger.warning("scraper_indisponivel_concorrente", concorrente_id=str(competitor.id), erro=str(exc))
+            logger.warning(
+                "scraper_indisponivel_concorrente",
+                concorrente_id=str(competitor.id),
+                erro=str(exc),
+                scraper_timeout_s=settings.scraper_timeout_seconds,
+            )
             competitor.status = "error"
             competitor.last_checked_at = now
             await session.commit()
@@ -251,7 +266,7 @@ async def collect_competitor(
             return {"success": False, "reason": "unavailable", "availability_changed": availability_changed}
 
     finally:
-        release_lock(redis, chave_lock)
+        release_lock(redis, chave_lock, lock_token)
         logger.debug(
             "lock_liberado_concorrente",
             concorrente_id=str(competitor.id),

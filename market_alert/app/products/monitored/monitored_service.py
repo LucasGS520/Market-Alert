@@ -124,7 +124,8 @@ async def collect_product(
         return {"success": False, "reason": "ineligible_status"}
 
     chave_lock = f"lock:collect:{product.id}"
-    if not acquire_lock(redis, chave_lock, timeout=300):
+    lock_token = acquire_lock(redis, chave_lock, timeout=300)
+    if not lock_token:
         now = datetime.now(timezone.utc)
         logger.info("coleta_pulada_lock_ativo", produto_id=str(product.id))
         next_dt, delay = compute_next_check(
@@ -152,7 +153,12 @@ async def collect_product(
         dominio = urlparse(product.url_original).netloc
         if not check_rate_limit(redis, dominio):
             now = datetime.now(timezone.utc)
-            logger.info("coleta_rate_limited", dominio=dominio, produto_id=str(product.id))
+            logger.info(
+                "coleta_rate_limited",
+                dominio=dominio,
+                produto_id=str(product.id),
+                ttl_s=settings.domain_rate_limit_ttl_seconds,
+            )
             next_dt, delay = compute_next_check(
                 reason="rate_limited",
                 now=now,
@@ -182,7 +188,12 @@ async def collect_product(
             resultado = await scraper.parse(product.url_original)
         except ScraperUnavailableError as exc:
             now = datetime.now(timezone.utc)
-            logger.warning("scraper_indisponivel", produto_id=str(product.id), erro=str(exc))
+            logger.warning(
+                "scraper_indisponivel",
+                produto_id=str(product.id),
+                erro=str(exc),
+                scraper_timeout_s=settings.scraper_timeout_seconds,
+            )
             product.status = "error"
             product.last_checked_at = now
             product.consecutive_failures = (product.consecutive_failures or 0) + 1
@@ -442,7 +453,7 @@ async def collect_product(
             return {"success": False, "reason": "unavailable"}
 
     finally:
-        release_lock(redis, chave_lock)
+        release_lock(redis, chave_lock, lock_token)
         logger.debug(
             "lock_liberado",
             produto_id=str(product.id),

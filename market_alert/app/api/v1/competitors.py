@@ -5,6 +5,7 @@ import structlog
 from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.v1.schemas import CreatedWithTask
 from app.infra.database import get_session
 from app.products.competitor.competitor_schemas import CompetitorCreate, CompetitorRead
 from app.products.competitor.competitor_service import create_competitor, delete_competitor, list_competitors
@@ -24,23 +25,25 @@ router_nested = APIRouter(prefix="/monitored/{monitored_id}/competitors", tags=[
 
 @router_nested.post(
     "",
-    response_model=CompetitorRead,
+    response_model=CreatedWithTask[CompetitorRead],
     status_code=status.HTTP_202_ACCEPTED,
 )
 async def add_competitor(
     monitored_id: uuid.UUID, body: CompetitorCreate, session: Session
-):
+) -> CreatedWithTask[CompetitorRead]:
     """Adicionar um concorrente a um produto monitorado."""
     concorrente = await create_competitor(session, monitored_id, str(body.url), body.name)
 
+    task_id: str | None = None
     try:
         from app.workers.tasks import collector_task
         tarefa = collector_task.delay(competitor_id=str(concorrente.id))
-        logger.info("coleta_concorrente_enfileirada", concorrente_id=str(concorrente.id), tarefa_id=tarefa.id)
+        task_id = tarefa.id
+        logger.info("coleta_concorrente_enfileirada", concorrente_id=str(concorrente.id), tarefa_id=task_id)
     except Exception as exc:
         logger.warning("enfileiramento_falhou", concorrente_id=str(concorrente.id), erro=str(exc))
 
-    return concorrente
+    return CreatedWithTask(data=CompetitorRead.model_validate(concorrente), task_id=task_id)
 
 
 @router_nested.get(

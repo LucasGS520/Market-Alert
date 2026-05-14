@@ -1,0 +1,302 @@
+{
+  "timestamp": "2026-05-13T17:11:53.213371",
+  "total_results": 8,
+  "results": [
+    {
+      "url": "https://www.mercadolivre.com.br/smart-tv-32-philco-led-roku-tv-hd-dolby-audio-p32cra/p/MLB51038092#reco_item_pos=2&reco_backend=item_decorator&reco_backend_type=function&reco_client=home_items-decorator-legacy&reco_id=2d372bf1-7f46-4655-a539-709653cb61b3&reco_model=&c_id=/home/navigation-trends-recommendations/element&c_uid=639f4715-236d-46d4-b43c-5d41ab1dfac2&da_id=navigation_trend&da_position=4&id_origin=/home/dynamic_access&da_sort_algorithm=ranker",
+      "marketplace": "mercadolivre",
+      "timestamp": "2026-05-13T17:12:25.047786",
+      "elapsed_seconds": 31.834363222122192,
+      "success": true,
+      "error_code": null,
+      "collection": {
+        "final_url": "https://www.mercadolivre.com.br/smart-tv-32-philco-led-roku-tv-hd-dolby-audio-p32cra/p/MLB51038092",
+        "status_code": 200,
+        "blocked": false,
+        "captcha_detected": false,
+        "html_length": 1383793,
+        "payload_count": 0,
+        "error": null
+      },
+      "extraction": {
+        "marketplace": "mercadolivre",
+        "url": "https://www.mercadolivre.com.br/smart-tv-32-philco-led-roku-tv-hd-dolby-audio-p32cra/p/MLB51038092",
+        "canonical_url": "https://www.mercadolivre.com.br/smart-tv-32-philco-led-roku-tv-hd-dolby-audio-p32cra/p/MLB51038092",
+        "title": "Smart Tv 32 Philco Led Roku Tv Hd Dolby Audio P32cra",
+        "price": "1325.72",
+        "currency": "BRL",
+        "available": true,
+        "seller": "Produtos do Loja da Ferramenta",
+        "product_id": "MLB51038092",
+        "thumbnail_url": "https://http2.mlstatic.com/D_NQ_NP_942875-MLA99952102899_112025-O.webp",
+        "extraction_method": "ssr_state",
+        "confidence": 0.92,
+        "collected_at": "2026-05-13T20:12:25.040964Z"
+      },
+      "diagnosis": {
+        "status": "success",
+        "cause": null,
+        "recommendations": []
+      }
+    },
+    {
+      "url": "https://www.mercadolivre.com.br/smart-tv-32-philco-p32vik-roku-led-dolby-audio-hdr-wi-fi-110220v/p/MLB63036814?pdp_filters=item_id:MLB4367472233#polycard_client=recommendations_pdp-pads-up&wid=MLB4367472233&sid=recos&reco_backend=recomm_platform_base_pads_rfa_MERGE&reco_model=search_recos_backend_merge&reco_client=pdp-pads-up&reco_item_pos=0&reco_backend_type=low_level&reco_id=a679ef2c-f4f2-42cc-a452-865481b9095a&is_advertising=true&ad_domain=PDPDESKTOP_UP&ad_position=1&ad_click_id=MWNjYTRhNzYtMGJiZi00YTQ3LTk3NDUtNzM0NDc2NWY4YjEz",
+      "marketplace": "mercadolivre",
+      "timestamp": "2026-05-13T17:12:48.711597",
+      "elapsed_seconds": 15.639148235321045,
+      "success": true,
+      "error_code": null,
+      "collection": {
+        "final_url": "https://www.mercadolivre.com.br/smart-tv-32-philco-p32vik-roku-led-dolby-audio-hdr-wi-fi-110220v/p/MLB63036814?pdp_filters=item_id%3AMLB4367472233",
+        "status_code": 200,
+        "blocked": false,
+        "captcha_detected": false,
+        "html_length": 1349241,
+        "payload_count": 0,
+        "error": null
+      },
+      "extraction": {
+        "marketplace": "mercadolivre",
+        "url": "https://www.mercadolivre.com.br/smart-tv-32-philco-p32vik-roku-led-dolby-audio-hdr-wi-fi-110220v/p/MLB63036814?pdp_filters=item_id%3AMLB4367472233",
+        "canonical_url": "https://www.mercadolivre.com.br/smart-tv-32-philco-p32vik-roku-led-dolby-audio-hdr-wi-fi-110220v/p/MLB63036814",
+        "title": "Smart Tv 32 Philco P32vik Roku Led Dolby Audio Hdr Wi-fi 110/220v",
+        "price": "928.32",
+        "currency": "BRL",
+        "available": true,
+        "seller": "Produtos do Vikings",
+        "product_id": "MLB63036814",
+        "thumbnail_url": "https://http2.mlstatic.com/D_NQ_NP_691057-MLA100479527690_122025-O.webp",
+        "extraction_method": "ssr_state",
+        "confidence": 0.92,
+        "collected_at": "2026-05-13T20:12:48.707872Z"
+      },
+      "diagnosis": {
+        "status": "success",
+        "cause": null,
+        "recommendations": []
+      }
+    },
+    {
+      "url": "https://www.mercadolivre.com.br/smart-tv-philco-58-p58vik-4k-uhd-led-roku-dolby-audio-wi-fi-hdr10-110220v/p/MLB67275824?pdp_filters=item_id:MLB4571470859#polycard_client=recommendations_pdp-pads-up&wid=MLB4571470859&sid=recos&reco_backend=recomm_platform_base_pads_rfa_MERGE&reco_model=search_recos_backend_merge&reco_client=pdp-pads-up&reco_item_pos=2&reco_backend_type=low_level&reco_id=94036998-9339-4877-a5e0-e204ea5902e3&is_advertising=true&ad_domain=PDPDESKTOP_UP&ad_position=3&ad_click_id=YjU4OWM2MDEtMGIyZi00MjhlLTkwOTEtMmVjNThkODQ1YTQ5",
+      "marketplace": "mercadolivre",
+      "timestamp": "2026-05-13T17:13:13.069395",
+      "elapsed_seconds": 16.344540119171143,
+      "success": true,
+      "error_code": null,
+      "collection": {
+        "final_url": "https://www.mercadolivre.com.br/smart-tv-philco-58-p58vik-4k-uhd-led-roku-dolby-audio-wi-fi-hdr10-110220v/p/MLB67275824?pdp_filters=item_id%3AMLB4571470859",
+        "status_code": 200,
+        "blocked": false,
+        "captcha_detected": false,
+        "html_length": 1287577,
+        "payload_count": 0,
+        "error": null
+      },
+      "extraction": {
+        "marketplace": "mercadolivre",
+        "url": "https://www.mercadolivre.com.br/smart-tv-philco-58-p58vik-4k-uhd-led-roku-dolby-audio-wi-fi-hdr10-110220v/p/MLB67275824?pdp_filters=item_id%3AMLB4571470859",
+        "canonical_url": "https://www.mercadolivre.com.br/smart-tv-philco-58-p58vik-4k-uhd-led-roku-dolby-audio-wi-fi-hdr10-110220v/p/MLB67275824",
+        "title": "Smart Tv Philco 58 P58vik 4k Uhd Led Roku Dolby Audio Wi-fi Hdr10 110/220v",
+        "price": "2299.08",
+        "currency": "BRL",
+        "available": true,
+        "seller": "Produtos do Vikings",
+        "product_id": "MLB67275824",
+        "thumbnail_url": "https://http2.mlstatic.com/D_NQ_NP_668507-MLA108744768802_032026-O.webp",
+        "extraction_method": "ssr_state",
+        "confidence": 0.92,
+        "collected_at": "2026-05-13T20:13:13.065877Z"
+      },
+      "diagnosis": {
+        "status": "success",
+        "cause": null,
+        "recommendations": []
+      }
+    },
+    {
+      "url": "https://www.mercadolivre.com.br/smart-tv-tcl-55-polegadas-qled-4k-p7k-wifi-bluetooth-google-tv-hdr10-dolby-atmos-dolby-vision-55p7k/p/MLB49996606?pdp_filters=item_id:MLB4562032101#polycard_client=recommendations_pdp-pads-up&wid=MLB4562032101&sid=recos&reco_backend=recomm_platform_base_pads_rfa_MERGE&reco_model=search_recos_backend_merge&reco_client=pdp-pads-up&reco_item_pos=1&reco_backend_type=low_level&reco_id=02ca8249-a118-40a1-9f7a-514ae3b444b5&is_advertising=true&ad_domain=PDPDESKTOP_UP&ad_position=2&ad_click_id=ZDgwOTZjOWQtZmI4Zi00Y2Y2LTk3NjYtODE5MTRlNWJkZGY1",
+      "marketplace": "mercadolivre",
+      "timestamp": "2026-05-13T17:13:35.430328",
+      "elapsed_seconds": 14.352243185043335,
+      "success": true,
+      "error_code": null,
+      "collection": {
+        "final_url": "https://www.mercadolivre.com.br/smart-tv-tcl-55-polegadas-qled-4k-p7k-wifi-bluetooth-google-tv-hdr10-dolby-atmos-dolby-vision-55p7k/p/MLB49996606?pdp_filters=item_id%3AMLB4562032101",
+        "status_code": 200,
+        "blocked": false,
+        "captcha_detected": false,
+        "html_length": 1373667,
+        "payload_count": 0,
+        "error": null
+      },
+      "extraction": {
+        "marketplace": "mercadolivre",
+        "url": "https://www.mercadolivre.com.br/smart-tv-tcl-55-polegadas-qled-4k-p7k-wifi-bluetooth-google-tv-hdr10-dolby-atmos-dolby-vision-55p7k/p/MLB49996606?pdp_filters=item_id%3AMLB4562032101",
+        "canonical_url": "https://www.mercadolivre.com.br/smart-tv-tcl-55-polegadas-qled-4k-p7k-wifi-bluetooth-google-tv-hdr10-dolby-atmos-dolby-vision-55p7k/p/MLB49996606",
+        "title": "Smart TV TCL 55 Polegadas QLED 4K P7K WiFi Bluetooth Google TV HDR10+ Dolby Atmos Dolby Vision 55P7K",
+        "price": "2518.52",
+        "currency": "BRL",
+        "available": true,
+        "seller": "Produtos do vendedor",
+        "product_id": "MLB49996606",
+        "thumbnail_url": "https://http2.mlstatic.com/D_NQ_NP_715551-MLA103757527265_012026-O.webp",
+        "extraction_method": "ssr_state",
+        "confidence": 0.92,
+        "collected_at": "2026-05-13T20:13:35.427130Z"
+      },
+      "diagnosis": {
+        "status": "success",
+        "cause": null,
+        "recommendations": []
+      }
+    },
+    {
+      "url": "https://www.mercadolivre.com.br/furadeira-e-parafusadeira-de-impacto-2-baterias-2000mah-21v-38-tb-21pkx-the-black-tools-com-maleta-e-acessorios/p/MLB44675814",
+      "marketplace": "mercadolivre",
+      "timestamp": "2026-05-13T17:13:59.083522",
+      "elapsed_seconds": 15.648121118545532,
+      "success": true,
+      "error_code": null,
+      "collection": {
+        "final_url": "https://www.mercadolivre.com.br/furadeira-e-parafusadeira-de-impacto-2-baterias-2000mah-21v-38-tb-21pkx-the-black-tools-com-maleta-e-acessorios/p/MLB44675814",
+        "status_code": 200,
+        "blocked": false,
+        "captcha_detected": false,
+        "html_length": 1500984,
+        "payload_count": 0,
+        "error": null
+      },
+      "extraction": {
+        "marketplace": "mercadolivre",
+        "url": "https://www.mercadolivre.com.br/furadeira-e-parafusadeira-de-impacto-2-baterias-2000mah-21v-38-tb-21pkx-the-black-tools-com-maleta-e-acessorios/p/MLB44675814",
+        "canonical_url": "https://www.mercadolivre.com.br/furadeira-e-parafusadeira-de-impacto-2-baterias-2000mah-21v-38-tb-21pkx-the-black-tools-com-maleta-e-acessorios/p/MLB44675814",
+        "title": "Furadeira E Parafusadeira De Impacto 2 Baterias 2000mah 21v 3/8 Tb-21pkx The Black Tools Com Maleta E Acessorios",
+        "price": "174.9",
+        "currency": "BRL",
+        "available": true,
+        "seller": "Produtos do Ismafer Ferramentas",
+        "product_id": "MLB44675814",
+        "thumbnail_url": "https://http2.mlstatic.com/D_NQ_NP_788169-MLA97324275551_112025-O.webp",
+        "extraction_method": "ssr_state",
+        "confidence": 0.92,
+        "collected_at": "2026-05-13T20:13:59.077131Z"
+      },
+      "diagnosis": {
+        "status": "success",
+        "cause": null,
+        "recommendations": []
+      }
+    },
+    {
+      "url": "https://www.mercadolivre.com.br/parafusadeira-furadeira-de-impacto-the-black-tools-profissional-tb-21px-2-baterias-com-maleta-60hz-amarelo/p/MLB30144703?pdp_filters=item_id:MLB4268042659#polycard_client=recommendations_pdp-pads-up&wid=MLB4268042659&sid=recos&reco_backend=recomm_platform_base_pads_rfa_MERGE&reco_model=search_recos_backend_merge&reco_client=pdp-pads-up&reco_item_pos=2&reco_backend_type=low_level&reco_id=fd4d6220-c3ff-43c0-bf35-3b54a6143599&is_advertising=true&ad_domain=PDPDESKTOP_UP&ad_position=3&ad_click_id=MzAyODcwOTctM2U4NS00ZTcwLTk0YjAtZjI0NWE2MTlkMmJi",
+      "marketplace": "mercadolivre",
+      "timestamp": "2026-05-13T17:14:19.639578",
+      "elapsed_seconds": 12.546762943267822,
+      "success": true,
+      "error_code": null,
+      "collection": {
+        "final_url": "https://www.mercadolivre.com.br/parafusadeira-furadeira-de-impacto-the-black-tools-profissional-tb-21px-2-baterias-com-maleta-60hz-amarelo/p/MLB30144703?pdp_filters=item_id%3AMLB4268042659",
+        "status_code": 200,
+        "blocked": false,
+        "captcha_detected": false,
+        "html_length": 1519869,
+        "payload_count": 0,
+        "error": null
+      },
+      "extraction": {
+        "marketplace": "mercadolivre",
+        "url": "https://www.mercadolivre.com.br/parafusadeira-furadeira-de-impacto-the-black-tools-profissional-tb-21px-2-baterias-com-maleta-60hz-amarelo/p/MLB30144703?pdp_filters=item_id%3AMLB4268042659",
+        "canonical_url": "https://www.mercadolivre.com.br/parafusadeira-furadeira-de-impacto-the-black-tools-profissional-tb-21px-2-baterias-com-maleta-60hz-amarelo/p/MLB30144703",
+        "title": "Parafusadeira Furadeira De Impacto The Black Tools Profissional TB-21PX 2 Baterias Com Maleta 60Hz Amarelo",
+        "price": "169.0",
+        "currency": "BRL",
+        "available": true,
+        "seller": "Produtos do THE BLACK TOOLS",
+        "product_id": "MLB30144703",
+        "thumbnail_url": "https://http2.mlstatic.com/D_NQ_NP_865332-MLA96868279679_102025-O.webp",
+        "extraction_method": "ssr_state",
+        "confidence": 0.92,
+        "collected_at": "2026-05-13T20:14:19.634119Z"
+      },
+      "diagnosis": {
+        "status": "success",
+        "cause": null,
+        "recommendations": []
+      }
+    },
+    {
+      "url": "https://www.mercadolivre.com.br/furadeira-e-parafusadeira-de-impacto-2-baterias-2000mah-21v-38-tb-21pkx-the-black-tools-com-maleta-e-acessorios/p/MLB44675814?pdp_filters=item_id:MLB4188936547#polycard_client=recommendations_pdp-pads-up&wid=MLB4188936547&sid=recos&reco_backend=recomm_platform_base_pads_rfa_MERGE&reco_model=search_recos_backend_merge&reco_client=pdp-pads-up&reco_item_pos=2&reco_backend_type=low_level&reco_id=255189b3-7b03-47fa-af25-9f20b8a6ac90&is_advertising=true&ad_domain=PDPDESKTOP_UP&ad_position=3&ad_click_id=MzhiZDJiODgtMWExMi00ODg0LTlmNWYtMmE1ZTZiYmRmZjUy",
+      "marketplace": "mercadolivre",
+      "timestamp": "2026-05-13T17:14:42.736588",
+      "elapsed_seconds": 15.089845418930054,
+      "success": true,
+      "error_code": null,
+      "collection": {
+        "final_url": "https://www.mercadolivre.com.br/furadeira-e-parafusadeira-de-impacto-2-baterias-2000mah-21v-38-tb-21pkx-the-black-tools-com-maleta-e-acessorios/p/MLB44675814?pdp_filters=item_id%3AMLB4188936547",
+        "status_code": 200,
+        "blocked": false,
+        "captcha_detected": false,
+        "html_length": 1525850,
+        "payload_count": 0,
+        "error": null
+      },
+      "extraction": {
+        "marketplace": "mercadolivre",
+        "url": "https://www.mercadolivre.com.br/furadeira-e-parafusadeira-de-impacto-2-baterias-2000mah-21v-38-tb-21pkx-the-black-tools-com-maleta-e-acessorios/p/MLB44675814?pdp_filters=item_id%3AMLB4188936547",
+        "canonical_url": "https://www.mercadolivre.com.br/furadeira-e-parafusadeira-de-impacto-2-baterias-2000mah-21v-38-tb-21pkx-the-black-tools-com-maleta-e-acessorios/p/MLB44675814",
+        "title": "Furadeira E Parafusadeira De Impacto 2 Baterias 2000mah 21v 3/8 Tb-21pkx The Black Tools Com Maleta E Acessorios",
+        "price": "174.9",
+        "currency": "BRL",
+        "available": true,
+        "seller": "Produtos do Ismafer Ferramentas",
+        "product_id": "MLB44675814",
+        "thumbnail_url": "https://http2.mlstatic.com/D_NQ_NP_788169-MLA97324275551_112025-O.webp",
+        "extraction_method": "ssr_state",
+        "confidence": 0.92,
+        "collected_at": "2026-05-13T20:14:42.731521Z"
+      },
+      "diagnosis": {
+        "status": "success",
+        "cause": null,
+        "recommendations": []
+      }
+    },
+    {
+      "url": "https://www.mercadolivre.com.br/chave-de-impacto-a-bateria-21v-12-pol-2400-rpm-bivolt-com-acessorios-e-maleta-the-black-tools/p/MLB28530314?pdp_filters=item_id:MLB3525364839#polycard_client=recommendations_pdp-pads-up&wid=MLB3525364839&sid=recos&reco_backend=recomm_platform_base_pads_rfa_MERGE&reco_model=search_recos_backend_merge&reco_client=pdp-pads-up&reco_item_pos=2&reco_backend_type=low_level&reco_id=fc53a922-316e-4ee3-9a84-38a0366dc182&is_advertising=true&ad_domain=PDPDESKTOP_UP&ad_position=3&ad_click_id=ODAzYmRjYzktMzVhNS00M2UyLThkMmMtMTZkYjYwYTA2ZTM3",
+      "marketplace": "mercadolivre",
+      "timestamp": "2026-05-13T17:15:04.276801",
+      "elapsed_seconds": 13.53777813911438,
+      "success": true,
+      "error_code": null,
+      "collection": {
+        "final_url": "https://www.mercadolivre.com.br/chave-de-impacto-a-bateria-21v-12-pol-2400-rpm-bivolt-com-acessorios-e-maleta-the-black-tools/p/MLB28530314?pdp_filters=item_id%3AMLB3525364839",
+        "status_code": 200,
+        "blocked": false,
+        "captcha_detected": false,
+        "html_length": 1418377,
+        "payload_count": 0,
+        "error": null
+      },
+      "extraction": {
+        "marketplace": "mercadolivre",
+        "url": "https://www.mercadolivre.com.br/chave-de-impacto-a-bateria-21v-12-pol-2400-rpm-bivolt-com-acessorios-e-maleta-the-black-tools/p/MLB28530314?pdp_filters=item_id%3AMLB3525364839",
+        "canonical_url": "https://www.mercadolivre.com.br/chave-de-impacto-a-bateria-21v-12-pol-2400-rpm-bivolt-com-acessorios-e-maleta-the-black-tools/p/MLB28530314",
+        "title": "Chave De Impacto A Bateria 21V 1/2\" Pol 2400 Rpm Bivolt Com Acessórios E Maleta The Black Tools",
+        "price": "274.55",
+        "currency": "BRL",
+        "available": true,
+        "seller": null,
+        "product_id": "MLB28530314",
+        "thumbnail_url": "https://http2.mlstatic.com/D_NQ_NP_718011-MLA97331673683_112025-O.webp",
+        "extraction_method": "ssr_state",
+        "confidence": 0.92,
+        "collected_at": "2026-05-13T20:15:04.273073Z"
+      },
+      "diagnosis": {
+        "status": "success",
+        "cause": null,
+        "recommendations": []
+      }
+    }
+  ]
+}

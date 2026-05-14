@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -5,6 +6,7 @@ import structlog
 from fastapi import FastAPI, HTTPException, Request
 from pydantic import AnyHttpUrl, BaseModel
 
+from app.core.config import settings
 from app.router import MarketplaceRouter
 from app.schemas import ErrorCode, ScrapeError, ScrapeResult
 from app.scraping.browser import BrowserSession
@@ -42,8 +44,15 @@ app = FastAPI(
 
 
 @app.get("/health", tags=["infraestrutura"])
-async def health() -> dict:
-    return {"status": "ok"}
+async def health(request: Request) -> dict:
+    browser: BrowserSession = request.app.state.browser
+    if browser._browser is None or not browser._browser.is_connected():
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            status_code=503,
+            content={"status": "degraded", "reason": "browser not initialized"},
+        )
+    return {"status": "ok", "browser": "ready"}
 
 
 @app.post("/scraper/parse", response_model=ScrapeResult, tags=["scraping"])
@@ -74,7 +83,27 @@ async def parse_url(body: ParseRequest, request: Request) -> ScrapeResult:
 
     try:
         adapter = _router.get_adapter(marketplace, request.app.state.browser)
-        result = await adapter.scrape(url)
+        result = await asyncio.wait_for(
+            adapter.scrape(url),
+            timeout=settings.max_total_request_seconds,
+        )
+    except asyncio.TimeoutError:
+        logger.error(
+            "timeout_global_parse",
+            url=url,
+            marketplace=marketplace,
+            timeout=settings.max_total_request_seconds,
+        )
+        raise HTTPException(
+            status_code=504,
+            detail=ScrapeError(
+                error_code=ErrorCode.TIMEOUT,
+                marketplace=marketplace,
+                url=url,
+                retryable=True,
+                message="Scraper timeout: operação excedeu o limite de tempo",
+            ).model_dump(),
+        )
     except Exception as exc:
         logger.error("erro_inesperado_parse", url=url, marketplace=marketplace, erro=str(exc))
         raise HTTPException(status_code=500, detail="Erro interno no scraper")

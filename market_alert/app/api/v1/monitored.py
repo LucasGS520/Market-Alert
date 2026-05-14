@@ -22,6 +22,8 @@ from app.products.monitored.monitored_service import (
     pause_product,
     resume_product,
 )
+from app.api.v1.schemas import CreatedWithTask
+from app.scheduling.scheduler_service import enqueue_with_lease
 
 logger = structlog.get_logger()
 
@@ -30,18 +32,11 @@ router = APIRouter(prefix="/monitored", tags=["monitored"])
 Session = Annotated[AsyncSession, Depends(get_session)]
 
 
-@router.post("/", response_model=MonitoredProductRead, status_code=status.HTTP_202_ACCEPTED)
-async def create_monitored(body: MonitoredProductCreate, session: Session) -> MonitoredProduct:
+@router.post("/", response_model=CreatedWithTask[MonitoredProductRead], status_code=status.HTTP_202_ACCEPTED)
+async def create_monitored(body: MonitoredProductCreate, session: Session) -> CreatedWithTask[MonitoredProductRead]:
     produto = await create_product(session, str(body.url), body.name)
-
-    try:
-        from app.workers.orchestrator import collection_orchestrator_task
-        tarefa = collection_orchestrator_task.delay(product_id=str(produto.id))
-        logger.info("coleta_enfileirada", produto_id=str(produto.id), tarefa_id=tarefa.id)
-    except Exception as exc:
-        logger.warning("enfileiramento_falhou", produto_id=str(produto.id), erro=str(exc))
-
-    return produto
+    task_id = await enqueue_with_lease(session, produto.id)
+    return CreatedWithTask(data=MonitoredProductRead.model_validate(produto), task_id=task_id)
 
 
 @router.get("/", response_model=list[MonitoredProductRead])

@@ -54,6 +54,11 @@ O `scheduler_task` dispara a cada minuto pelo Celery Beat e reenfileira
 
 ## Operação de Coleta
 
+No Docker Compose, a coleta roda em modo conservador: o worker da fila
+`collection` usa concorrência 1 e `prefetch-multiplier=1`. Isso evita rajadas
+de Playwright contra o mesmo marketplace e prioriza concluir coletas lentas com
+respostas operacionais claras.
+
 ### Estados operacionais
 
 | Status        | Significado                                   | Elegível para coleta?            |
@@ -157,7 +162,8 @@ os retries Celery se esgotem.
 - Request: `POST {SCRAPER_URL}/scraper/parse` com `{"url": "<produto>"}`.
 - Sucesso `200`: retorna `marketplace`, `price`, `available`, `title`, `collected_at` e metadados.
 - Erro semântico `422`: retorna `error_code`, `marketplace`, `url`, `retryable` e `message`.
-- Conexão recusada / timeout / HTTP inesperado → `ScraperUnavailableError` → retry automático.
+- Timeout global `504`: retorna o mesmo payload estruturado com `error_code=TIMEOUT` e é tratado como retryable.
+- Conexão recusada / timeout HTTP do cliente / HTTP inesperado → `ScraperUnavailableError` → retry automático.
 
 ### Tasks Celery internas
 
@@ -191,6 +197,10 @@ scheduler_task()                    # dispara pelo Beat a cada 1 minuto
 | `COLLECTION_RETRY_MAX_DELAY_MINUTES`  | `60`   | Cap máximo do backoff (minutos)                         |
 | `COLLECTION_RUN_TIMEOUT_SECONDS`      | `300`  | SLA máximo de uma rodada coordenada (segundos)          |
 | `DOMAIN_CAPTCHA_COOLDOWN_SECONDS`     | `300`  | Cooldown de domínio após CAPTCHA ou bloqueio            |
+| `DOMAIN_RATE_LIMIT_TTL_SECONDS`       | `2`    | Cooldown curto entre coletas do mesmo domínio           |
+| `SCRAPER_TIMEOUT_SECONDS`             | `270`  | Timeout do cliente `market_alert` ao chamar o scraper   |
+| `MAX_TOTAL_REQUEST_SECONDS`           | `240`  | Timeout global por parse dentro do `market_scraper`     |
+| `PLAYWRIGHT_TIMEOUT_MS`               | `60000`| Timeout de navegação/espera do Playwright               |
 | `NOTIFICATION_DELTA_PERCENT`          | `5.0`  | Variação mínima (%) para disparar alerta                |
 | `NOTIFICATION_COOLDOWN_MINUTES`       | `30`   | Cooldown entre alertas do mesmo produto                 |
 

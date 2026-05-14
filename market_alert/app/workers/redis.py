@@ -8,7 +8,15 @@ from app.infra.config import settings
 logger = structlog.get_logger()
 
 _LOCK_TTL = 60
-_RATE_LIMIT_TTL = 5
+# Libera o lock apenas se o token ainda corresponde ao adquirente original.
+# Evita que uma task antiga apague o lock de outra task após expiração.
+_RELEASE_SCRIPT = """
+if redis.call("GET", KEYS[1]) == ARGV[1] then
+    return redis.call("DEL", KEYS[1])
+else
+    return 0
+end
+"""
 
 
 def get_redis() -> Redis:
@@ -17,12 +25,18 @@ def get_redis() -> Redis:
 
 # ── Locks distribuídos ─────────────────────────────────────────────────────────
 
-def acquire_lock(redis: Redis, key: str, timeout: int = _LOCK_TTL) -> bool:
-    return bool(redis.set(key, "1", nx=True, ex=timeout))
+def acquire_lock(redis: Redis, key: str, timeout: int = _LOCK_TTL) -> str | None:
+    """Adquire lock e retorna token único, ou None se já ocupado."""
+    token = str(uuid.uuid4())
+    acquired = redis.set(key, token, nx=True, ex=timeout)
+    return token if acquired else None
 
 
-def release_lock(redis: Redis, key: str) -> None:
-    redis.delete(key)
+def release_lock(redis: Redis, key: str, token: str) -> None:
+    """Libera lock somente se o token ainda corresponde. Seguro contra expiração."""
+    released = redis.eval(_RELEASE_SCRIPT, 1, key, token)
+    if not released:
+        logger.warning("lock_release_ignorado", key=key, motivo="token_divergente_ou_expirado")
 
 
 # ── Rate limit por domínio ─────────────────────────────────────────────────────
@@ -32,7 +46,7 @@ def check_rate_limit(redis: Redis, domain: str) -> bool:
     key = f"ratelimit:domain:{domain}"
     if redis.exists(key):
         return False
-    redis.set(key, "1", ex=_RATE_LIMIT_TTL)
+    redis.set(key, "1", ex=settings.domain_rate_limit_ttl_seconds)
     return True
 
 

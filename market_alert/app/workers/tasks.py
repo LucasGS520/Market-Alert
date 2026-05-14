@@ -105,6 +105,7 @@ def collector_task(
                     "collector_task_iniciando",
                     fase="produto",
                     produto_id=product_id,
+                    task_id=self.request.id,
                     tentativa=self.request.retries,
                 )
 
@@ -147,6 +148,7 @@ def collector_task(
                     fase="concorrente",
                     concorrente_id=competitor_id,
                     run_id=run_id,
+                    task_id=self.request.id,
                     tentativa=self.request.retries,
                 )
 
@@ -431,7 +433,8 @@ def scheduler_task() -> None:
     redis = get_redis()
     inicio = time.monotonic()
 
-    if not acquire_lock(redis, "lock:scheduler", timeout=settings.scheduler_lock_ttl_seconds):
+    scheduler_token = acquire_lock(redis, "lock:scheduler", timeout=settings.scheduler_lock_ttl_seconds)
+    if not scheduler_token:
         logger.info("scheduler_lock_ocupado_pulando")
         return
 
@@ -447,8 +450,7 @@ def scheduler_task() -> None:
             total_encontrados=resultado["total_encontrados"],
             total_enfileirados=resultado["total_enfileirados"],
             skips_lease=resultado["skips"]["lease_ativo"],
-            skips_enqueue=resultado["skips"]["enqueue_falhou"],
             duracao_s=round(time.monotonic() - inicio, 2),
         )
     finally:
-        release_lock(redis, "lock:scheduler")
+        release_lock(redis, "lock:scheduler", scheduler_token)

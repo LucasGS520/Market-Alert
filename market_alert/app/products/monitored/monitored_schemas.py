@@ -24,7 +24,12 @@ class MonitoredProductRead(BaseModel):
     current_price: Decimal | None
     is_available: bool | None
     next_check_at: datetime | None
+    next_check_reason: str | None
     last_checked_at: datetime | None
+    last_collection_started_at: datetime | None
+    last_collection_finished_at: datetime | None
+    collection_lease_until: datetime | None
+    consecutive_failures: int
     check_interval_minutes: int
     created_at: datetime
 

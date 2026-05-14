@@ -87,6 +87,7 @@ def collection_orchestrator_task(self: Task, product_id: str) -> None:
             logger.info(
                 "orquestrador_iniciando",
                 produto_id=product_id,
+                task_id=self.request.id,
                 tentativa=self.request.retries,
             )
 

@@ -8,21 +8,24 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.infra.database import Base
 
-EventType = Enum("price_drop", "price_rise", "status_change", name="notification_event_type")
-ChannelType = Enum("ntfy", "telert", name="notification_channel")
+EventType = Enum(
+    "price_drop", "price_rise", "status_change",
+    "ranking_change",
+    "product_unavailable", "product_available",
+    "market_price_drop", "market_price_rise",
+    "competitor_unavailable", "competitor_available",
+    name="notification_event_type",
+)
 DeliveryStatus = Enum("pending", "sent", "failed", "skipped", name="delivery_status")
 
 
 class NotificationLog(Base):
     __tablename__ = "notification_logs"
     __table_args__ = (
-        # Impede duplicidade de entrega para o mesmo (comparação, evento, canal).
-        # Parcial: registros antigos sem comparison_id não são afetados.
         Index(
-            "uq_notification_comparison_event_channel",
+            "uq_notification_comparison_event",
             "comparison_id",
             "event_type",
-            "channel",
             unique=True,
             postgresql_where=text("comparison_id IS NOT NULL AND delivery_status = 'sent'"),
         ),
@@ -38,7 +41,6 @@ class NotificationLog(Base):
         UUID(as_uuid=True), ForeignKey("comparisons.id", ondelete="SET NULL"), nullable=True
     )
     event_type: Mapped[str] = mapped_column(EventType, nullable=False)
-    channel: Mapped[str | None] = mapped_column(ChannelType, nullable=True)
     delivery_status: Mapped[str] = mapped_column(DeliveryStatus, nullable=False)
     message: Mapped[str] = mapped_column(Text, nullable=False)
     title: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -48,6 +50,11 @@ class NotificationLog(Base):
     new_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
     old_status: Mapped[str | None] = mapped_column(String(50), nullable=True)
     new_status: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    old_ranking: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    new_ranking: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    competitor_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("competitors.id", ondelete="SET NULL"), nullable=True
+    )
     run_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     run_status: Mapped[str | None] = mapped_column(String(50), nullable=True)
     participants_count: Mapped[int | None] = mapped_column(Integer, nullable=True)

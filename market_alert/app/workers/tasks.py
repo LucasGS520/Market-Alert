@@ -109,6 +109,8 @@ def collector_task(
                     tentativa=self.request.retries,
                 )
 
+                prev_available = produto.is_available
+
                 try:
                     resultado = await collect_product(session, redis, scraper, produto)
                 except ScraperUnavailableError as exc:
@@ -131,6 +133,29 @@ def collector_task(
                     razao=resultado.get("reason"),
                     duracao_s=round(time.monotonic() - inicio, 2),
                 )
+
+                from app.infra.config import settings as _cfg
+                curr_available = produto.is_available
+                if _cfg.ntfy_topic and prev_available != curr_available:
+                    from app.workers.redis import is_in_cooldown as _in_cd
+                    evento_disp = "product_available" if curr_available else "product_unavailable"
+                    if not _in_cd(redis, pid, evento_disp):
+                        notification_task.delay(
+                            monitored_id=str(pid),
+                            comparison_id=None,
+                            event_type=evento_disp,
+                            old_price=None,
+                            new_price=None,
+                            old_status=None,
+                            new_status=None,
+                            product_url=produto.url_original,
+                            product_name=produto.name,
+                        )
+                        logger.info(
+                            "notificacao_disponibilidade_enfileirada",
+                            produto_id=str(pid),
+                            evento=evento_disp,
+                        )
 
             # ── Coleta de concorrente ───────────────────────────────────────
             elif competitor_id:
@@ -193,6 +218,34 @@ def collector_task(
                 elif resultado.get("availability_changed"):
                     # Disponibilidade do concorrente mudou; recalcula posição competitiva
                     comparison_task.delay(monitored_id=monitored_id_str)
+
+                # Evento de disponibilidade de concorrente
+                if resultado.get("availability_changed"):
+                    from app.infra.config import settings as _cfg
+                    from app.workers.redis import is_in_cooldown as _in_cd
+                    if _cfg.ntfy_topic:
+                        evento_comp = "competitor_available" if concorrente.is_available else "competitor_unavailable"
+                        if not _in_cd(redis, concorrente.monitored_id, evento_comp, competitor_id=cid):
+                            produto_mon = await session.get(MonitoredProduct, concorrente.monitored_id)
+                            if produto_mon:
+                                notification_task.delay(
+                                    monitored_id=monitored_id_str,
+                                    comparison_id=None,
+                                    event_type=evento_comp,
+                                    old_price=None,
+                                    new_price=None,
+                                    old_status=None,
+                                    new_status=None,
+                                    competitor_id=str(cid),
+                                    competitor_name=concorrente.name,
+                                    product_url=produto_mon.url_original,
+                                    product_name=produto_mon.name,
+                                )
+                                logger.info(
+                                    "notificacao_disponibilidade_concorrente_enfileirada",
+                                    concorrente_id=competitor_id,
+                                    evento=evento_comp,
+                                )
 
                 logger.info(
                     "collector_task_concluido",
@@ -273,34 +326,56 @@ def comparison_task(
                     preco_novo = Decimal(new_price) if new_price else None
 
                     # Evento 1: variação real do preço do produto → price_drop/price_rise
-                    # Sem preço real (coleta de concorrente): variação de min_price competitivo
-                    # → market_min_price_drop/rise (semântica diferente, cooldown independente)
                     evento_preco: str | None = None
-                    old_price_preco = old_price
-                    new_price_preco = new_price
                     if preco_anterior is not None and preco_novo is not None and preco_anterior > 0:
                         variacao_pct = float(abs(preco_novo - preco_anterior) / preco_anterior * 100)
                         if variacao_pct >= _settings.notification_delta_percent:
                             evento_preco = "price_drop" if preco_novo < preco_anterior else "price_rise"
-                    elif comparacao_anterior is not None:
-                        min_ant = comparacao_anterior.min_price
-                        min_nov = comparacao.min_price
-                        if min_ant and min_nov and min_ant != min_nov and min_ant > 0:
-                            variacao_pct = float(abs(float(min_nov) - float(min_ant)) / float(min_ant) * 100)
-                            if variacao_pct >= _settings.notification_delta_percent:
-                                evento_preco = "market_min_price_drop" if min_nov < min_ant else "market_min_price_rise"
-                                old_price_preco = str(min_ant)
-                                new_price_preco = str(min_nov)
 
-                    # Evento 2: mudança de status competitivo — cooldown próprio, independente do preço
+                    # Evento 2: mudança de status competitivo
                     evento_status: str | None = None
                     if status_anterior and comparacao.status != status_anterior:
                         evento_status = "status_change"
 
-                    for evento, ep_old, ep_new in [
-                        (evento_preco, old_price_preco, new_price_preco),
-                        (evento_status, None, None),
-                    ]:
+                    # Evento 3: mudança de ranking do monitorado
+                    evento_ranking: str | None = None
+                    rank_old: int | None = None
+                    rank_new: int | None = None
+                    if comparacao_anterior is not None and comparacao.ranking != comparacao_anterior.ranking:
+                        evento_ranking = "ranking_change"
+                        rank_old = comparacao_anterior.ranking
+                        rank_new = comparacao.ranking
+
+                    # Evento 4: movimentação de preço mínimo do mercado (coleta de concorrente)
+                    evento_mercado: str | None = None
+                    market_old: str | None = None
+                    market_new: str | None = None
+                    if preco_anterior is None and preco_novo is None and comparacao_anterior is not None:
+                        min_ant = comparacao_anterior.min_price
+                        min_nov = comparacao.min_price
+                        if min_ant and min_nov and min_ant > 0:
+                            variacao_pct = float(abs(float(min_nov) - float(min_ant)) / float(min_ant) * 100)
+                            if variacao_pct >= _settings.notification_delta_percent:
+                                evento_mercado = "market_price_drop" if min_nov < min_ant else "market_price_rise"
+                                market_old = str(min_ant)
+                                market_new = str(min_nov)
+
+                    if _settings.ntfy_topic is None:
+                        logger.debug(
+                            "notificacao_ignorada_ntfy_desabilitado",
+                            produto_id=str(mid),
+                            run_id=run_id,
+                        )
+                        return
+
+                    # (evento, ep_old, ep_new, rank_old, rank_new, cooldown_minutes)
+                    _eventos = [
+                        (evento_preco, old_price, new_price, None, None, _settings.notification_cooldown_minutes),
+                        (evento_status, None, None, None, None, _settings.notification_cooldown_minutes),
+                        (evento_ranking, None, None, rank_old, rank_new, _settings.notification_cooldown_minutes),
+                        (evento_mercado, market_old, market_new, None, None, _settings.competitor_cooldown_minutes),
+                    ]
+                    for evento, ep_old, ep_new, r_old, r_new, cooldown_ttl in _eventos:
                         if not evento:
                             continue
                         if is_in_cooldown(redis, mid, evento):
@@ -319,6 +394,8 @@ def comparison_task(
                             new_price=ep_new,
                             old_status=status_anterior,
                             new_status=comparacao.status,
+                            old_ranking=r_old,
+                            new_ranking=r_new,
                             product_url=produto.url_original,
                             product_name=produto.name,
                             run_id=run_id,
@@ -361,6 +438,10 @@ def notification_task(
     new_status: str | None,
     product_url: str,
     product_name: str | None = None,
+    old_ranking: int | None = None,
+    new_ranking: int | None = None,
+    competitor_id: str | None = None,
+    competitor_name: str | None = None,
     run_id: str | None = None,
     run_status: str | None = None,
     participants_count: int | None = None,
@@ -401,6 +482,10 @@ def notification_task(
         new_price=Decimal(new_price) if new_price else None,
         old_status=old_status,
         new_status=new_status,
+        old_ranking=old_ranking,
+        new_ranking=new_ranking,
+        competitor_id=uuid.UUID(competitor_id) if competitor_id else None,
+        competitor_name=competitor_name,
         run_id=run_id,
         run_status=run_status,
         participants_count=participants_count,

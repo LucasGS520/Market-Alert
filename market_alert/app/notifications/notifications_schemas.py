@@ -12,7 +12,6 @@ class NotificationLogRead(BaseModel):
     monitored_id: uuid.UUID
     comparison_id: uuid.UUID | None
     event_type: str
-    channel: str | None
     delivery_status: str
     message: str
     title: str | None
@@ -22,6 +21,9 @@ class NotificationLogRead(BaseModel):
     new_price: Decimal | None
     old_status: str | None
     new_status: str | None
+    old_ranking: int | None
+    new_ranking: int | None
+    competitor_id: uuid.UUID | None
     run_id: str | None
     run_status: str | None
     participants_count: int | None

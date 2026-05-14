@@ -57,20 +57,37 @@ def set_domain_cooldown(redis: Redis, domain: str) -> None:
 
 
 # ── Cooldown de notificações ───────────────────────────────────────────────────
-# Granularidade: produto + tipo de evento.
+# Granularidade: produto + tipo de evento (+ concorrente para eventos tier 2).
 # Cooldown de um evento não bloqueia outros eventos do mesmo produto.
 
-def notification_cooldown_key(monitored_id: uuid.UUID, event_type: str) -> str:
+def notification_cooldown_key(
+    monitored_id: uuid.UUID,
+    event_type: str,
+    competitor_id: uuid.UUID | None = None,
+) -> str:
+    if competitor_id:
+        return f"cooldown:notify:{monitored_id}:{event_type}:{competitor_id}"
     return f"cooldown:notify:{monitored_id}:{event_type}"
 
 
-def is_in_cooldown(redis: Redis, monitored_id: uuid.UUID, event_type: str) -> bool:
-    return bool(redis.exists(notification_cooldown_key(monitored_id, event_type)))
+def is_in_cooldown(
+    redis: Redis,
+    monitored_id: uuid.UUID,
+    event_type: str,
+    competitor_id: uuid.UUID | None = None,
+) -> bool:
+    return bool(redis.exists(notification_cooldown_key(monitored_id, event_type, competitor_id)))
 
 
-def set_cooldown(redis: Redis, monitored_id: uuid.UUID, event_type: str) -> None:
-    ttl = settings.notification_cooldown_minutes * 60
-    redis.set(notification_cooldown_key(monitored_id, event_type), "1", ex=ttl)
+def set_cooldown(
+    redis: Redis,
+    monitored_id: uuid.UUID,
+    event_type: str,
+    ttl_minutes: int | None = None,
+    competitor_id: uuid.UUID | None = None,
+) -> None:
+    ttl = (ttl_minutes or settings.notification_cooldown_minutes) * 60
+    redis.set(notification_cooldown_key(monitored_id, event_type, competitor_id), "1", ex=ttl)
 
 
 # ── Cache ──────────────────────────────────────────────────────────────────────

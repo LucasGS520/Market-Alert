@@ -19,11 +19,11 @@ class Settings(BaseSettings):
     # ── Notificações ───────────────────────────────────────────────────────
     ntfy_url: str = "https://ntfy.sh"
     ntfy_topic: str | None = None
-    telert_token: str | None = None
 
     # ── Regras de Negócio de Notificação ──────────────────────────────────
     notification_delta_percent: float = 5.0
-    notification_cooldown_minutes: int = 30
+    notification_cooldown_minutes: int = 30       # tier 1: produto monitorado
+    competitor_cooldown_minutes: int = 60         # tier 2: mercado / concorrentes
 
     # ── Regras de Comparação ───────────────────────────────────────────────
     status_threshold_competitive: float = 1.0   # % acima do mínimo → ainda "competitive"

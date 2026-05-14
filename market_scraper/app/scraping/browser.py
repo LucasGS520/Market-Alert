@@ -188,6 +188,9 @@ class BrowserSession:
         # no mesmo contexto, evitando que reset por CAPTCHA mate páginas em andamento.
         self._semaphores: dict[str, asyncio.Semaphore] = {}
 
+    def is_ready(self) -> bool:
+        return self._browser is not None and self._browser.is_connected()
+
     async def start(self) -> None:
         pw = await async_playwright().start()
         self._pw = pw
@@ -282,6 +285,9 @@ class BrowserSession:
                     "width": base_vp["width"] + random.randint(-20, 20),
                     "height": base_vp["height"] + random.randint(-20, 20),
                 }
+                if self._browser is None:
+                    raise RuntimeError("Browser ainda não inicializado")
+
                 ctx = await self._browser.new_context(
                     user_agent=cfg["user_agent"],
                     viewport=viewport,

@@ -40,6 +40,7 @@ services:
       dockerfile: Dockerfile
     command: uvicorn app.main:app --host 0.0.0.0 --port 8001
     env_file: .env
+    shm_size: "1gb"
     ports:
       - "8001:8001"
     networks:
@@ -47,11 +48,11 @@ services:
     volumes:
       - scraper_session_state:/app/.session_state
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8001/health || exit 1"]
-      interval: 5s
+      test: ["CMD-SHELL", "curl -f http://localhost:8001/ready || exit 1"]
+      interval: 10s
       timeout: 5s
-      retries: 5
-      start_period: 20s
+      retries: 72
+      start_period: 30s
 
   market_alert_api:
     image: market_alert:local

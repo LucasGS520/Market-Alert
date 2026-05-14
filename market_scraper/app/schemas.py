@@ -12,6 +12,7 @@ class ErrorCode(str, Enum):
     BLOCKED = "BLOCKED"
     UNAVAILABLE = "UNAVAILABLE"
     REDIRECT = "REDIRECT"
+    REDIRECT_TO_SEARCH = "REDIRECT_TO_SEARCH"
     LAYOUT_CHANGED = "LAYOUT_CHANGED"
     TIMEOUT = "TIMEOUT"
     MARKETPLACE_NOT_SUPPORTED = "MARKETPLACE_NOT_SUPPORTED"
@@ -25,6 +26,7 @@ RETRYABLE_BY_ERROR_CODE: dict[ErrorCode, bool] = {
     ErrorCode.BLOCKED: True,
     ErrorCode.TIMEOUT: True,
     ErrorCode.REDIRECT: True,
+    ErrorCode.REDIRECT_TO_SEARCH: False,
     ErrorCode.PRICE_NOT_FOUND: False,
     ErrorCode.LAYOUT_CHANGED: False,
     ErrorCode.UNAVAILABLE: False,

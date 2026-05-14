@@ -379,6 +379,32 @@ async def collect_product(
             await session.commit()
             await session.refresh(historico)
 
+            # Canonicalização persistente: quando o scraper retorna uma canonical_url
+            # confiável diferente da URL armazenada, atualiza o registro para que
+            # próximas coletas já partam da URL canônica e robusta.
+            if resultado.canonical_url and resultado.confidence >= 0.90:
+                from sqlalchemy.exc import IntegrityError
+                from app.products.url_utils import normalize_url
+                canon_normalized = normalize_url(resultado.canonical_url)
+                if canon_normalized != product.url_normalized:
+                    try:
+                        product.url_original = resultado.canonical_url
+                        product.url_normalized = canon_normalized
+                        await session.commit()
+                        logger.info(
+                            "url_canonicalizada",
+                            produto_id=str(product.id),
+                            url_anterior=product.url_normalized,
+                            canonical_url=resultado.canonical_url,
+                        )
+                    except IntegrityError:
+                        await session.rollback()
+                        logger.info(
+                            "url_canonical_conflito",
+                            produto_id=str(product.id),
+                            canonical_url=resultado.canonical_url,
+                        )
+
             logger.info(
                 "produto_coletado",
                 produto_id=str(product.id),

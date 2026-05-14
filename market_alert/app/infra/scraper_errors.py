@@ -21,6 +21,7 @@ _ERROR_MAP: dict[str, ScraperErrorClassification] = {
     "MARKETPLACE_NOT_SUPPORTED": ScraperErrorClassification("unsupported", "no_retry",           False),
     "UNAVAILABLE":               ScraperErrorClassification("unavailable", "retry_later",        False),
     "REDIRECT":                  ScraperErrorClassification("error",       "retry_later",        False),
+    "REDIRECT_TO_SEARCH":        ScraperErrorClassification("error",       "no_retry",           False),
 }
 
 _DEFAULT = ScraperErrorClassification("error", "retry_later", False)

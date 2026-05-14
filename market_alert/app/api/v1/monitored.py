@@ -63,9 +63,12 @@ async def pause_monitored(product_id: uuid.UUID, session: Session) -> MonitoredP
 async def resume_monitored(product_id: uuid.UUID, session: Session) -> MonitoredProduct:
     produto = await resume_product(session, product_id)
     try:
-        from app.workers.orchestrator import collection_orchestrator_task
-        tarefa = collection_orchestrator_task.delay(product_id=str(produto.id))
-        logger.info("coleta_enfileirada_apos_resume", produto_id=str(produto.id), tarefa_id=tarefa.id)
+        from app.scheduling.scheduler_service import enqueue_with_lease
+        tarefa_id = await enqueue_with_lease(session, produto.id)
+        if tarefa_id:
+            logger.info("coleta_enfileirada_apos_resume", produto_id=str(produto.id), tarefa_id=tarefa_id)
+        else:
+            logger.info("coleta_pulada_lease_ativo_apos_resume", produto_id=str(produto.id))
     except Exception as exc:
         logger.warning("enfileiramento_falhou_apos_resume", produto_id=str(produto.id), erro=str(exc))
     return produto

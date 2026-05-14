@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     # Garante que o scraper responde antes do caller desistir, evitando trabalho órfão.
     max_total_request_seconds: int = 240
 
+    # Intervalo entre tentativas de inicializar o Chromium em background.
+    browser_startup_retry_seconds: int = 30
+
     # Número máximo de payloads de rede interceptados por requisição
     max_intercepted_payloads: int = 10
 

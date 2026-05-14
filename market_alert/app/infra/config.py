@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     notification_cooldown_minutes: int = 30
 
     # ── Regras de Comparação ───────────────────────────────────────────────
-    status_threshold_competitive: float = 5.0   # % acima do mínimo → ainda "competitive"
+    status_threshold_competitive: float = 1.0   # % acima do mínimo → ainda "competitive"
     status_threshold_attention: float = 15.0    # % acima do mínimo → "attention" (acima → "urgent")
     comparison_dedup_window_minutes: int = 5    # janela de deduplicação de snapshots idênticos
 

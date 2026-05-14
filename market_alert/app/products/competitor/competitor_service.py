@@ -225,6 +225,30 @@ async def collect_competitor(
             await session.commit()
             await session.refresh(historico)
 
+            # Canonicalização persistente: atualiza url_original/url_normalized quando
+            # o scraper devolve uma canonical_url confiável diferente da URL armazenada.
+            if resultado.canonical_url and resultado.confidence >= 0.90:
+                from sqlalchemy.exc import IntegrityError
+                from app.products.url_utils import normalize_url
+                canon_normalized = normalize_url(resultado.canonical_url)
+                if canon_normalized != competitor.url_normalized:
+                    try:
+                        competitor.url_original = resultado.canonical_url
+                        competitor.url_normalized = canon_normalized
+                        await session.commit()
+                        logger.info(
+                            "url_canonicalizada_concorrente",
+                            concorrente_id=str(competitor.id),
+                            canonical_url=resultado.canonical_url,
+                        )
+                    except IntegrityError:
+                        await session.rollback()
+                        logger.info(
+                            "url_canonical_conflito_concorrente",
+                            concorrente_id=str(competitor.id),
+                            canonical_url=resultado.canonical_url,
+                        )
+
             logger.info(
                 "concorrente_coletado",
                 concorrente_id=str(competitor.id),

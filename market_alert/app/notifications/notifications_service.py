@@ -83,6 +83,12 @@ def _montar_mensagem(
     elif evento == "price_rise":
         titulo = f"Alta de preço — {nome_produto}"
         mensagem = f"Preço subiu de R$ {old_price:.2f} para R$ {new_price:.2f}\n{url_original}"
+    elif evento == "market_min_price_drop":
+        titulo = f"Novo mínimo de mercado — {nome_produto}"
+        mensagem = f"Menor preço do mercado caiu de R$ {old_price:.2f} para R$ {new_price:.2f}\n{url_original}"
+    elif evento == "market_min_price_rise":
+        titulo = f"Alta no mínimo de mercado — {nome_produto}"
+        mensagem = f"Menor preço do mercado subiu de R$ {old_price:.2f} para R$ {new_price:.2f}\n{url_original}"
     else:
         titulo = f"Mudança de status — {nome_produto}"
         mensagem = f"Status mudou de '{old_status}' para '{new_status}'\n{url_original}"
@@ -131,12 +137,16 @@ def _registrar_tentativa(
 
 
 def _is_permanent_dns_failure(exc: httpx.ConnectError) -> bool:
-    """Detecta falha DNS permanente (EAI_NONAME = errno -2): host não existe."""
-    cause = exc.__cause__
-    while cause is not None:
-        if isinstance(cause, socket.gaierror) and cause.args[0] == socket.EAI_NONAME:
+    """Detecta falha DNS permanente percorrendo __cause__ e __context__ da cadeia."""
+    seen: set[int] = set()
+    cause: BaseException | None = exc.__cause__ or exc.__context__
+    while cause is not None and id(cause) not in seen:
+        seen.add(id(cause))
+        if isinstance(cause, socket.gaierror) and cause.args[0] in (socket.EAI_NONAME, -2):
             return True
-        cause = getattr(cause, "__cause__", None)
+        if "Name or service not known" in str(cause):
+            return True
+        cause = getattr(cause, "__cause__", None) or getattr(cause, "__context__", None)
     return False
 
 
@@ -296,7 +306,7 @@ async def send_notification(
             comparison_id=str(payload.comparison_id) if payload.comparison_id else None,
         )
 
-    if retryable_exc:
+    if retryable_exc and not algum_sucesso:
         raise RetryableDeliveryError(str(retryable_exc)) from retryable_exc
 
 

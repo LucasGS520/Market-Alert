@@ -252,7 +252,6 @@ def comparison_task(
         async with AsyncSessionLocal() as session:
             from app.comparison.comparison_model import Comparison
             from app.infra.config import settings as _settings
-            from app.notifications.notifications_service import detect_notification_event
             from app.workers.redis import is_in_cooldown
 
             mid = uuid.UUID(monitored_id)
@@ -273,30 +272,51 @@ def comparison_task(
                     preco_anterior = Decimal(old_price) if old_price else None
                     preco_novo = Decimal(new_price) if new_price else None
 
-                    # Quando chamado sem preços (coleta autônoma de concorrente), usa variação
-                    # de min_price entre snapshots como proxy de mudança de cenário competitivo.
-                    if preco_anterior is None and preco_novo is None and comparacao_anterior is not None:
+                    # Evento 1: variação real do preço do produto → price_drop/price_rise
+                    # Sem preço real (coleta de concorrente): variação de min_price competitivo
+                    # → market_min_price_drop/rise (semântica diferente, cooldown independente)
+                    evento_preco: str | None = None
+                    old_price_preco = old_price
+                    new_price_preco = new_price
+                    if preco_anterior is not None and preco_novo is not None and preco_anterior > 0:
+                        variacao_pct = float(abs(preco_novo - preco_anterior) / preco_anterior * 100)
+                        if variacao_pct >= _settings.notification_delta_percent:
+                            evento_preco = "price_drop" if preco_novo < preco_anterior else "price_rise"
+                    elif comparacao_anterior is not None:
                         min_ant = comparacao_anterior.min_price
                         min_nov = comparacao.min_price
-                        if min_ant is not None and min_nov is not None and min_ant != min_nov:
-                            preco_anterior = Decimal(str(min_ant))
-                            preco_novo = Decimal(str(min_nov))
-                            old_price = str(preco_anterior)
-                            new_price = str(preco_novo)
+                        if min_ant and min_nov and min_ant != min_nov and min_ant > 0:
+                            variacao_pct = float(abs(float(min_nov) - float(min_ant)) / float(min_ant) * 100)
+                            if variacao_pct >= _settings.notification_delta_percent:
+                                evento_preco = "market_min_price_drop" if min_nov < min_ant else "market_min_price_rise"
+                                old_price_preco = str(min_ant)
+                                new_price_preco = str(min_nov)
 
-                    evento = detect_notification_event(
-                        preco_anterior, preco_novo,
-                        status_anterior, comparacao.status,
-                        _settings.notification_delta_percent,
-                    )
+                    # Evento 2: mudança de status competitivo — cooldown próprio, independente do preço
+                    evento_status: str | None = None
+                    if status_anterior and comparacao.status != status_anterior:
+                        evento_status = "status_change"
 
-                    if evento and not is_in_cooldown(redis, mid, evento):
+                    for evento, ep_old, ep_new in [
+                        (evento_preco, old_price_preco, new_price_preco),
+                        (evento_status, None, None),
+                    ]:
+                        if not evento:
+                            continue
+                        if is_in_cooldown(redis, mid, evento):
+                            logger.debug(
+                                "notificacao_cooldown_ativo",
+                                produto_id=str(mid),
+                                evento=evento,
+                                run_status=run_status,
+                            )
+                            continue
                         notification_task.delay(
                             monitored_id=str(mid),
                             comparison_id=str(comparacao.id),
                             event_type=evento,
-                            old_price=old_price,
-                            new_price=new_price,
+                            old_price=ep_old,
+                            new_price=ep_new,
                             old_status=status_anterior,
                             new_status=comparacao.status,
                             product_url=produto.url_original,
@@ -312,18 +332,12 @@ def comparison_task(
                             comparison_id=str(comparacao.id),
                             run_id=run_id,
                         )
-                    elif not evento:
+
+                    if not evento_preco and not evento_status:
                         logger.debug(
                             "notificacao_sem_evento",
                             produto_id=str(mid),
                             run_id=run_id,
-                            run_status=run_status,
-                        )
-                    else:
-                        logger.debug(
-                            "notificacao_cooldown_ativo",
-                            produto_id=str(mid),
-                            evento=evento,
                             run_status=run_status,
                         )
 

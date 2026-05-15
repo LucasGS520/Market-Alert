@@ -1,0 +1,160 @@
+/* =========================================================
+   Market Alert — Colors & Type
+   ---------------------------------------------------------
+   Adapted from the TradeMap visual language (dark neutral
+   scale, Metropolis type) with ORANGE primary & YELLOW
+   secondary, as the Market Alert brand.
+   ========================================================= */
+
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  /* ============ Brand ============ */
+  --ma-brand-primary:        #FF7A1A;
+  --ma-brand-primary-soft:   #FF9347;
+  --ma-brand-primary-deep:   #D85F00;
+  --ma-brand-primary-rgb:    255, 122, 26;
+
+  --ma-brand-secondary:      #FFC400;
+  --ma-brand-secondary-soft: #FFD84D;
+  --ma-brand-secondary-deep: #C99700;
+  --ma-brand-secondary-rgb:  255, 196, 0;
+
+  /* ============ Neutrals (dark scale) ============ */
+  --ma-neutral-0:     #FFFFFF;
+  --ma-neutral-50:    #E7EAEE;
+  --ma-neutral-100:   #CACED4;
+  --ma-neutral-200:   #8F8F9A;
+  --ma-neutral-300:   #5B5C68;
+  --ma-neutral-400:   #3D3E4B;
+  --ma-neutral-500:   #353546;
+  --ma-neutral-600:   #2A2B38;
+  --ma-neutral-700:   #23242F;
+  --ma-neutral-800:   #1A1B24;
+  --ma-neutral-900:   #13141B;
+  --ma-neutral-950:   #0B0C12;
+
+  /* ============ Semantic foreground / background ============ */
+  --ma-bg:            var(--ma-neutral-900);
+  --ma-bg-raised:     var(--ma-neutral-700);
+  --ma-bg-elevated:   var(--ma-neutral-500);
+  --ma-bg-overlay:    rgba(11, 12, 18, 0.72);
+  --ma-bg-tint-warm:  rgba(255, 122, 26, 0.10);
+
+  --ma-fg:            #F0F0F0;
+  --ma-fg-strong:     #FFFFFF;
+  --ma-fg-muted:      #AAAAAA;
+  --ma-fg-subtle:     #707080;
+  --ma-fg-inverted:   #13141B;
+
+  --ma-border:        #2F3040;
+  --ma-border-strong: #3D3E4B;
+  --ma-border-soft:   rgba(255, 255, 255, 0.06);
+
+  /* ============ Feedback / Variation ============ */
+  --ma-success:        #25D634;
+  --ma-success-bg:     rgba(37, 214, 52, 0.14);
+  --ma-success-strong: #0FEF83;
+
+  --ma-danger:         #E04949;
+  --ma-danger-bg:      rgba(224, 73, 73, 0.14);
+  --ma-danger-strong:  #D30D48;
+
+  --ma-warning:        #F0960F;
+  --ma-warning-bg:     rgba(240, 150, 15, 0.16);
+
+  --ma-info:           #3C96D4;
+  --ma-info-bg:        rgba(60, 150, 212, 0.14);
+
+  --ma-var-up-bg:      #00D600;
+  --ma-var-up-fg:      #13141B;
+  --ma-var-down-bg:    #F90007;
+  --ma-var-down-fg:    #FFFFFF;
+  --ma-var-flat-bg:    var(--ma-neutral-500);
+  --ma-var-flat-fg:    var(--ma-fg-muted);
+
+  /* ============ Type ============ */
+  --ma-font-sans:    "Manrope", "Metropolis", system-ui, sans-serif;
+  --ma-font-mono:    "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+  --ma-font-display: "Manrope", "Metropolis", sans-serif;
+
+  --ma-text-2xs:  10px;
+  --ma-text-xs:   12px;
+  --ma-text-sm:   13px;
+  --ma-text-base: 14px;
+  --ma-text-md:   16px;
+  --ma-text-lg:   18px;
+  --ma-text-xl:   22px;
+  --ma-text-2xl:  28px;
+  --ma-text-3xl:  36px;
+  --ma-text-4xl:  48px;
+  --ma-text-5xl:  64px;
+
+  --ma-leading-tight:  1.15;
+  --ma-leading-snug:   1.3;
+  --ma-leading-normal: 1.5;
+  --ma-leading-loose:  1.7;
+
+  --ma-tracking-tight:  -0.02em;
+  --ma-tracking-normal: 0;
+  --ma-tracking-wide:   0.04em;
+  --ma-tracking-caps:   0.12em;
+
+  /* ============ Radii ============ */
+  --ma-radius-none: 0;
+  --ma-radius-xs:   4px;
+  --ma-radius-sm:   6px;
+  --ma-radius-md:   10px;
+  --ma-radius-lg:   16px;
+  --ma-radius-pill: 999px;
+
+  /* ============ Spacing ============ */
+  --ma-space-1:  4px;
+  --ma-space-2:  8px;
+  --ma-space-3:  12px;
+  --ma-space-4:  16px;
+  --ma-space-5:  20px;
+  --ma-space-6:  24px;
+  --ma-space-8:  32px;
+  --ma-space-10: 40px;
+  --ma-space-12: 48px;
+  --ma-space-16: 64px;
+
+  /* ============ Shadows / Elevation ============ */
+  --ma-shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.32);
+  --ma-shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.36);
+  --ma-shadow-md: 0 8px 22px rgba(0, 0, 0, 0.44);
+  --ma-shadow-lg: 0 18px 48px rgba(0, 0, 0, 0.5);
+  --ma-shadow-glow-primary: 0 0 0 1px rgba(255, 122, 26, 0.35),
+                            0 8px 30px rgba(255, 122, 26, 0.22);
+  --ma-shadow-glow-secondary: 0 0 0 1px rgba(255, 196, 0, 0.35),
+                              0 8px 30px rgba(255, 196, 0, 0.18);
+
+  --ma-ring-focus: 0 0 0 3px rgba(255, 122, 26, 0.35);
+
+  /* ============ Motion ============ */
+  --ma-ease-out:    cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ma-ease-in-out: cubic-bezier(0.45, 0, 0.55, 1);
+  --ma-dur-fast:    120ms;
+  --ma-dur-base:    180ms;
+  --ma-dur-slow:    260ms;
+}
+
+body {
+  font-family: var(--ma-font-sans);
+  font-size:   var(--ma-text-base);
+  line-height: var(--ma-leading-normal);
+  color:       var(--ma-fg);
+  background:  var(--ma-bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+.ma-h1, h1.ma { font-family: var(--ma-font-display); font-size: var(--ma-text-4xl); font-weight: 800; line-height: var(--ma-leading-tight); letter-spacing: var(--ma-tracking-tight); color: var(--ma-fg-strong); }
+.ma-h2, h2.ma { font-size: var(--ma-text-2xl); font-weight: 700; line-height: var(--ma-leading-snug); letter-spacing: var(--ma-tracking-tight); color: var(--ma-fg-strong); }
+.ma-h3, h3.ma { font-size: var(--ma-text-xl); font-weight: 700; line-height: var(--ma-leading-snug); color: var(--ma-fg-strong); }
+.ma-h4, h4.ma { font-size: var(--ma-text-lg); font-weight: 600; line-height: var(--ma-leading-snug); }
+.ma-p, p.ma   { font-size: var(--ma-text-base); line-height: var(--ma-leading-normal); color: var(--ma-fg); }
+.ma-small, small.ma { font-size: var(--ma-text-xs); color: var(--ma-fg-muted); }
+.ma-eyebrow { font-size: var(--ma-text-2xs); font-weight: 700; letter-spacing: var(--ma-tracking-caps); text-transform: uppercase; color: var(--ma-brand-primary); }
+.ma-mono, code.ma { font-family: var(--ma-font-mono); font-size: var(--ma-text-sm); font-variant-numeric: tabular-nums; }
+.ma-tabular { font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }

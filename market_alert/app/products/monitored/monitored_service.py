@@ -29,6 +29,53 @@ async def list_products(session: AsyncSession) -> list[MonitoredProduct]:
     return list(resultado.scalars().all())
 
 
+async def list_products_with_comparisons(
+    session: AsyncSession,
+) -> list[tuple["MonitoredProduct", "Comparison | None", int]]:
+    from sqlalchemy import func
+    from app.comparison.comparison_model import Comparison
+    from app.products.competitor.competitor_model import Competitor
+
+    products_q = await session.execute(
+        select(MonitoredProduct).order_by(MonitoredProduct.created_at.desc())
+    )
+    products = list(products_q.scalars().all())
+    if not products:
+        return []
+
+    product_ids = [p.id for p in products]
+
+    latest_calc_subq = (
+        select(
+            Comparison.monitored_id,
+            func.max(Comparison.calculated_at).label("max_calc"),
+        )
+        .where(Comparison.monitored_id.in_(product_ids))
+        .group_by(Comparison.monitored_id)
+        .subquery()
+    )
+    latest_comparisons_q = await session.execute(
+        select(Comparison).join(
+            latest_calc_subq,
+            (Comparison.monitored_id == latest_calc_subq.c.monitored_id)
+            & (Comparison.calculated_at == latest_calc_subq.c.max_calc),
+        )
+    )
+    latest_by_product = {c.monitored_id: c for c in latest_comparisons_q.scalars().all()}
+
+    counts_q = await session.execute(
+        select(Competitor.monitored_id, func.count(Competitor.id).label("cnt"))
+        .where(Competitor.monitored_id.in_(product_ids))
+        .group_by(Competitor.monitored_id)
+    )
+    competitor_counts = {row.monitored_id: row.cnt for row in counts_q}
+
+    return [
+        (p, latest_by_product.get(p.id), competitor_counts.get(p.id, 0))
+        for p in products
+    ]
+
+
 async def create_product(session: AsyncSession, url: str, name: str | None) -> MonitoredProduct:
     from app.products.url_utils import normalize_url
 

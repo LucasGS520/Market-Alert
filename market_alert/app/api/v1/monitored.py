@@ -19,6 +19,7 @@ from app.products.monitored.monitored_service import (
     delete_product,
     get_with_latest_comparison,
     list_products,
+    list_products_with_comparisons,
     pause_product,
     resume_product,
 )
@@ -39,9 +40,17 @@ async def create_monitored(body: MonitoredProductCreate, session: Session) -> Cr
     return CreatedWithTask(data=MonitoredProductRead.model_validate(produto), task_id=task_id)
 
 
-@router.get("/", response_model=list[MonitoredProductRead])
+@router.get("/", response_model=list[MonitoredProductDetail])
 async def list_monitored(session: Session):
-    return await list_products(session)
+    rows = await list_products_with_comparisons(session)
+    result = []
+    for produto, comparacao, count in rows:
+        item = MonitoredProductDetail.model_validate(produto)
+        if comparacao:
+            item.latest_comparison = ComparisonRead.model_validate(comparacao)
+        item.competitors_count = count
+        result.append(item)
+    return result
 
 
 @router.get("/{product_id}", response_model=MonitoredProductDetail)

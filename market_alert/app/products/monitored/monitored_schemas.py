@@ -36,6 +36,7 @@ class MonitoredProductRead(BaseModel):
 
 class MonitoredProductDetail(MonitoredProductRead):
     latest_comparison: ComparisonRead | None = None
+    competitors_count: int = 0
 
 
 class MonitoredProductPatch(BaseModel):

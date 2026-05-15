@@ -1,0 +1,158 @@
+{
+  "timestamp": "2026-05-15T15:11:55.152621",
+  "total_results": 5,
+  "results": [
+    {
+      "url": "https://www.mercadolivre.com.br/kit-lanterna-traseira-led-hilux-16-17-18-19-20-21-22-23-24/up/MLBU3329266942",
+      "marketplace": "mercadolivre",
+      "timestamp": "2026-05-15T15:12:26.833557",
+      "elapsed_seconds": 31.680827856063843,
+      "success": true,
+      "error_code": null,
+      "collection": {
+        "final_url": "https://www.mercadolivre.com.br/kit-lanterna-traseira-led-hilux-16-17-18-19-20-21-22-23-24/up/MLBU3329266942",
+        "status_code": 200,
+        "blocked": false,
+        "captcha_detected": false,
+        "html_length": 1041149,
+        "payload_count": 0,
+        "error": null
+      },
+      "extraction": {
+        "marketplace": "mercadolivre",
+        "url": "https://www.mercadolivre.com.br/kit-lanterna-traseira-led-hilux-16-17-18-19-20-21-22-23-24/up/MLBU3329266942",
+        "canonical_url": "https://www.mercadolivre.com.br/kit-lanterna-traseira-led-hilux-16-17-18-19-20-21-22-23-24/up/MLBU3329266942",
+        "title": "Kit Lanterna Traseira Led Hilux 16 17 18 19 20 21 22 23 24",
+        "price": "945.9",
+        "currency": "BRL",
+        "available": true,
+        "seller": "Produtos do vendedor",
+        "product_id": "MLBU3329266942",
+        "thumbnail_url": "https://http2.mlstatic.com/D_NQ_NP_843637-MLB105313918782_012026-O.webp",
+        "extraction_method": "ssr_state",
+        "confidence": 0.92,
+        "collected_at": "2026-05-15T18:12:26.827992Z"
+      },
+      "diagnosis": {
+        "status": "success",
+        "cause": null,
+        "recommendations": []
+      }
+    },
+    {
+      "url": "https://produto.mercadolivre.com.br/MLB-1205069682-farol-palio-2005-2006-2007-2008-2009-anel-preto-celebration-_JM",
+      "marketplace": "mercadolivre",
+      "timestamp": "2026-05-15T15:13:03.083359",
+      "elapsed_seconds": 28.227360486984253,
+      "success": false,
+      "error_code": "REDIRECT",
+      "collection": {
+        "final_url": "https://www.mercadolivre.com.br/MLB-1205069682-farol-palio-2005-2006-2007-2008-2009-anel-preto-celebration-_JM",
+        "status_code": 404,
+        "blocked": false,
+        "captcha_detected": false,
+        "html_length": 9158,
+        "payload_count": 0,
+        "error": null
+      },
+      "extraction": "REDIRECT",
+      "diagnosis": {
+        "status": "failed",
+        "cause": "REDIRECIONAMENTO_NAO_PRODUTO",
+        "recommendations": [
+          "Página parece ser de busca/recomendação, não de produto único"
+        ]
+      }
+    },
+    {
+      "url": "https://www.mercadolivre.com.br/anuncios/MLBU729640320/modificar/bomni/variation/1207927519-update_omni-17a3e16e3286/user_product_item_detail_form?callback_url=https%3A%2F%2Fwww.mercadolivre.com.br%2Fanuncios%3Ffilters%3DOMNI_ACTIVE%257COMNI_INACTIVE%26page%3D1%26sort%3DDEFAULT%26search%3Dfarol%2Bpalio",
+      "marketplace": "mercadolivre",
+      "timestamp": "2026-05-15T15:13:36.865671",
+      "elapsed_seconds": 25.77489423751831,
+      "success": false,
+      "error_code": "CAPTCHA_DETECTED",
+      "collection": {
+        "final_url": "https://www.mercadolivre.com/jms/mlb/lgz/msl/login/H4sIAAAAAAAEAzWP2w6CMAyG32XXRpREUS6Nb2HMUlnBxrLNrXiI8d0tqHftt__QvQyHjryVZ0RTm4zMZmYig7Qh9Zacwn5EmQT_62mUQIIeBVM29WsM6dDtUE1jTAucUUUwyNm2HO7Kph5llC0-1OeB7R1PN0J9nQw_fcLrgFkVaiJ_AyZnpzY1d0HhWSTmuih6ZJozFEu33rbbvXnPtDiLlQTNxdSSBtTIGJkaEAr-e_663CwWVVlVOqxW5UZTHTZMHvWvh-P7A9B-A4kSAQAA/notregistered",
+        "status_code": 200,
+        "blocked": false,
+        "captcha_detected": true,
+        "html_length": 153509,
+        "payload_count": 0,
+        "error": null
+      },
+      "extraction": "CAPTCHA_DETECTED",
+      "diagnosis": {
+        "status": "failed",
+        "cause": "CAPTCHA_DETECTADO",
+        "recommendations": [
+          "CAPTCHA detectado no HTML de mercadolivre",
+          "IP/sessão foi marcado como suspeito",
+          "Solução: aguardar DOMAIN_CAPTCHA_COOLDOWN_SECONDS antes de retry",
+          "Implementação: usar Redis para marcar domínios bloqueados por CAPTCHA"
+        ]
+      }
+    },
+    {
+      "url": "https://produto.mercadolivre.com.br/MLB-3569674321-farol-dianteiro-hilux-sr-srv-srx-com-led-2021-2022-2023-2024-_JM",
+      "marketplace": "mercadolivre",
+      "timestamp": "2026-05-15T15:14:29.430293",
+      "elapsed_seconds": 44.539843797683716,
+      "success": false,
+      "error_code": "REDIRECT",
+      "collection": {
+        "final_url": "https://www.mercadolivre.com.br/MLB-3569674321-farol-dianteiro-hilux-sr-srv-srx-com-led-2021-2022-2023-2024-_JM",
+        "status_code": 404,
+        "blocked": false,
+        "captcha_detected": false,
+        "html_length": 9158,
+        "payload_count": 0,
+        "error": null
+      },
+      "extraction": "REDIRECT",
+      "diagnosis": {
+        "status": "failed",
+        "cause": "REDIRECIONAMENTO_NAO_PRODUTO",
+        "recommendations": [
+          "Página parece ser de busca/recomendação, não de produto único"
+        ]
+      }
+    },
+    {
+      "url": "https://www.mercadolivre.com.br/par-farol-uno-mille-fire-economy-way-04-2005-2006-2007-2008/up/MLBU729679580",
+      "marketplace": "mercadolivre",
+      "timestamp": "2026-05-15T15:14:56.773350",
+      "elapsed_seconds": 19.32429337501526,
+      "success": true,
+      "error_code": null,
+      "collection": {
+        "final_url": "https://www.mercadolivre.com.br/par-farol-uno-mille-fire-economy-way-04-2005-2006-2007-2008/up/MLBU729679580",
+        "status_code": 200,
+        "blocked": false,
+        "captcha_detected": false,
+        "html_length": 937921,
+        "payload_count": 0,
+        "error": null
+      },
+      "extraction": {
+        "marketplace": "mercadolivre",
+        "url": "https://www.mercadolivre.com.br/par-farol-uno-mille-fire-economy-way-04-2005-2006-2007-2008/up/MLBU729679580",
+        "canonical_url": "https://www.mercadolivre.com.br/par-farol-uno-mille-fire-economy-way-04-2005-2006-2007-2008/up/MLBU729679580",
+        "title": "Par Farol Uno Mille Fire Economy Way 04 2005 2006 2007 2008 ",
+        "price": "196.9",
+        "currency": "BRL",
+        "available": true,
+        "seller": "Produtos do vendedor",
+        "product_id": "MLBU729679580",
+        "thumbnail_url": "https://http2.mlstatic.com/D_NQ_NP_778522-MLB92845720607_092025-O.webp",
+        "extraction_method": "ssr_state",
+        "confidence": 0.92,
+        "collected_at": "2026-05-15T18:14:56.769634Z"
+      },
+      "diagnosis": {
+        "status": "success",
+        "cause": null,
+        "recommendations": []
+      }
+    }
+  ]
+}

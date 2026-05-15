@@ -3,12 +3,18 @@ from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, Numeric, String, Text, func, text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSON, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.infra.database import Base
 
 EventType = Enum(
+    # Novos alert types consolidados (uso ativo)
+    "price_drop_alert", "price_rise_alert",
+    "competitive_position_alert",
+    "availability_alert",
+    "error_alert",
+    # Valores legados (mantidos para linhas históricas)
     "price_drop", "price_rise", "status_change",
     "ranking_change",
     "product_unavailable", "product_available",
@@ -52,6 +58,9 @@ class NotificationLog(Base):
     new_status: Mapped[str | None] = mapped_column(String(50), nullable=True)
     old_ranking: Mapped[int | None] = mapped_column(Integer, nullable=True)
     new_ranking: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    market_min_old: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    market_min_new: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    reason_codes: Mapped[list | None] = mapped_column(JSON, nullable=True)
     competitor_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("competitors.id", ondelete="SET NULL"), nullable=True
     )

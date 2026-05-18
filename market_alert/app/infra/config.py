@@ -39,8 +39,14 @@ class Settings(BaseSettings):
     max_competitors_per_product: int = 5
 
     # ── Rate Limiting de Domínio ───────────────────────────────────────────
-    domain_captcha_cooldown_seconds: int = 300
+    domain_captcha_cooldown_seconds: int = 300  # mantido para compat; usar circuit breaker
     domain_rate_limit_ttl_seconds: int = 2
+
+    # ── Circuit Breaker de Domínio (escalada progressiva) ─────────────────
+    domain_circuit_cooldown_tier1: int = 300    # 1ª falha consecutiva: 5 min
+    domain_circuit_cooldown_tier2: int = 600    # 2ª falha consecutiva: 10 min
+    domain_circuit_cooldown_tier3: int = 1200   # 3ª+ falha consecutiva: 20 min
+    domain_circuit_failure_ttl: int = 86400     # TTL do contador de falhas: 24h
 
     # ── Retry e Backoff de Coleta ──────────────────────────────────────────
     collection_retry_base_delay_minutes: int = 5

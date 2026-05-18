@@ -4,6 +4,7 @@ import re
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import structlog
 from playwright.async_api import (
@@ -187,6 +188,9 @@ class BrowserSession:
         # Serializa navegações por marketplace: impede múltiplas páginas simultâneas
         # no mesmo contexto, evitando que reset por CAPTCHA mate páginas em andamento.
         self._semaphores: dict[str, asyncio.Semaphore] = {}
+        # Marketplaces que tiveram contexto resetado por CAPTCHA/bloqueio — pula
+        # warm-up na próxima criação de contexto para não visitar o domínio bloqueado.
+        self._skip_warmup: set[str] = set()
 
     def is_ready(self) -> bool:
         return self._browser is not None and self._browser.is_connected()
@@ -241,6 +245,8 @@ class BrowserSession:
             logger.debug("sessao_disco_removida", marketplace=marketplace)
         except Exception:
             pass
+        # Sinaliza que o próximo contexto não deve fazer warm-up no domínio bloqueado
+        self._skip_warmup.add(marketplace)
 
     async def _warm_up_context(self, marketplace: str, ctx: BrowserContext) -> None:
         """Visita a homepage com interações reais antes do primeiro produto."""
@@ -300,8 +306,9 @@ class BrowserSession:
                 self._contexts[marketplace] = ctx
                 logger.info("contexto_criado", marketplace=marketplace, cookies_restaurados=storage_state is not None)
 
-                if storage_state is None:
+                if storage_state is None and marketplace not in self._skip_warmup:
                     await self._warm_up_context(marketplace, ctx)
+                self._skip_warmup.discard(marketplace)
 
             return self._contexts[marketplace]
 
@@ -367,6 +374,15 @@ class BrowserSession:
                     if resp.status == 403:
                         blocked = True
                         logger.warning("browser_403", url=url, marketplace=marketplace)
+
+                # Detecta redirecionamento para páginas de verificação/busca via URL final
+                # A URL final pode diferir da solicitada após redirect do marketplace
+                if not blocked:
+                    final = page.url
+                    final_path = urlparse(final).path.lower()
+                    if any(seg in final_path for seg in ("/identity/", "/login", "/security", "/verification")):
+                        blocked = True
+                        logger.warning("browser_redirect_verificacao", url=url, final_url=final, marketplace=marketplace)
 
                 if not blocked:
                     await _try_accept_cookies(page)

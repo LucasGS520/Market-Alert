@@ -43,9 +43,7 @@ BrowserSession = _browser_module.BrowserSession
 
 DEFAULT_URLS = [
     "https://www.mercadolivre.com.br/kit-lanterna-traseira-led-hilux-16-17-18-19-20-21-22-23-24/up/MLBU3329266942",
-    "https://produto.mercadolivre.com.br/MLB-1205069682-farol-palio-2005-2006-2007-2008-2009-anel-preto-celebration-_JM",
     "https://www.mercadolivre.com.br/par-farol-palio-2008-2009-2010-siena-08-2009-2010-2011--reto/up/MLBU729640320",
-    "https://produto.mercadolivre.com.br/MLB-3569674321-farol-dianteiro-hilux-sr-srv-srx-com-led-2021-2022-2023-2024-_JM",
     "https://www.mercadolivre.com.br/par-farol-uno-mille-fire-economy-way-04-2005-2006-2007-2008/up/MLBU729679580",
 ]
 

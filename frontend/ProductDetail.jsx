@@ -42,11 +42,13 @@ function PriceChart({ data, height = 220 }) {
 }
 
 const NEXT_CHECK_REASON_LABEL = {
-  price_changed:  'preço variou — frequência aumentada',
-  recurring:      'ciclo automático regular',
-  stable_backoff: 'preço estável — frequência reduzida',
-  retry_backoff:  'retry após falha de coleta',
-  manual:         'enfileirado manualmente',
+  price_changed:        'preço variou — frequência aumentada',
+  recurring:            'ciclo automático regular',
+  stable_backoff:       'preço estável — frequência reduzida',
+  retry_backoff:        'retry após falha de coleta',
+  manual:               'enfileirado manualmente',
+  domain_blocked:       'domínio bloqueado — aguardando cooldown',
+  domain_circuit_open:  'domínio bloqueado — circuito aberto',
 };
 
 const STABILITY_LABEL = {
@@ -208,11 +210,21 @@ function ProductDetail({ product, onBack, onRefresh }) {
         <div className="ma-chart">
           <div className="ma-chart-head">
             <div className="left">
-              <div className="label">Preço atual · seu produto</div>
-              <div className="value">{brl(product.current_price)}</div>
+              <div className="label">
+                {product.is_price_stale ? 'Último preço válido · seu produto' : 'Preço atual · seu produto'}
+              </div>
+              <div className="value" style={product.is_price_stale ? {color: 'var(--ma-fg-muted)'} : {}}>
+                {brl(product.current_price)}
+              </div>
+              {product.is_price_stale && (
+                <div style={{fontSize: 11, color: 'var(--ma-danger)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 2}}>
+                  <Icon name="warning" size={11}/>
+                  dado obsoleto · coletado em {product.last_successful_collection_at || product.last_checked_at || '—'}
+                </div>
+              )}
               <div className="delta">
-                <VariationBadge value={product.variation_24h}/>
-                {product.previous_price != null && (
+                {!product.is_price_stale && <VariationBadge value={product.variation_24h}/>}
+                {product.previous_price != null && !product.is_price_stale && (
                   <span>vs. <span style={{fontFamily: 'var(--ma-font-mono)'}}>{brl(product.previous_price)}</span> (24h)</span>
                 )}
               </div>
@@ -231,17 +243,40 @@ function ProductDetail({ product, onBack, onRefresh }) {
           {cmp ? (
             <>
               <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 14}}>
-                <div>
-                  <div className="ma-kpi-label">Sua posição</div>
-                  <div className="ma-kpi-value" style={{fontSize: 28, color: cmp.ranking === 1 ? 'var(--ma-success)' : 'var(--ma-fg-strong)'}}>
-                    #{cmp.ranking}<span style={{fontSize: 14, color: 'var(--ma-fg-muted)', fontWeight: 500}}> de {cmp.participants_count || '?'}</span>
-                  </div>
-                  <div className="ma-kpi-sub">
-                    {cmp.ranking === 1
-                      ? 'menor preço do mercado'
-                      : `${cmp.ranking - 1} concorrente${cmp.ranking - 1 > 1 ? 's' : ''} mais barato${cmp.ranking - 1 > 1 ? 's' : ''}`}
-                  </div>
-                </div>
+                {(() => {
+                  const rankingValido = cmp.run_status !== 'no_competitors'
+                    && cmp.run_status !== 'expired'
+                    && (cmp.valid_competitors_count || 0) > 0;
+                  return (
+                    <div>
+                      <div className="ma-kpi-label" style={{display:'flex', alignItems:'center', gap: 6}}>
+                        Sua posição
+                        {cmp.run_status === 'partial' && (
+                          <Tag tone="warning" size="xs">rodada parcial</Tag>
+                        )}
+                      </div>
+                      {rankingValido ? (
+                        <>
+                          <div className="ma-kpi-value" style={{fontSize: 28, color: cmp.ranking === 1 ? 'var(--ma-success)' : 'var(--ma-fg-strong)'}}>
+                            #{cmp.ranking}<span style={{fontSize: 14, color: 'var(--ma-fg-muted)', fontWeight: 500}}> de {cmp.participants_count || '?'}</span>
+                          </div>
+                          <div className="ma-kpi-sub">
+                            {cmp.ranking === 1
+                              ? 'menor preço do mercado'
+                              : `${cmp.ranking - 1} concorrente${cmp.ranking - 1 > 1 ? 's' : ''} mais barato${cmp.ranking - 1 > 1 ? 's' : ''}`}
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="ma-kpi-value" style={{fontSize: 28, color: 'var(--ma-fg-muted)'}}>— / —</div>
+                          <div className="ma-kpi-sub" style={{color: 'var(--ma-fg-subtle)'}}>
+                            {cmp.run_status === 'no_competitors' ? 'sem concorrentes na rodada' : 'dados insuficientes'}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })()}
                 <div>
                   <div className="ma-kpi-label">Preço médio</div>
                   <div className="ma-kpi-value" style={{fontSize: 28}}>{brl(cmp.average_price)}</div>

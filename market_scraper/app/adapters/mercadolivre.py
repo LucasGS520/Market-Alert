@@ -22,6 +22,12 @@ logger = structlog.get_logger()
 
 _PRODUCT_ID_RE = re.compile(r"MLB[A-Z]?-?\d+", re.IGNORECASE)
 
+# Padrões de URL que indicam redirecionamento para páginas não-produto
+_REDIRECT_PATTERNS = re.compile(
+    r"(/identity/|/login|/security|/verification|/checkout/|/seller-registration)"
+)
+_SEARCH_URL_PATTERNS = re.compile(r"(/search\?|/listado/|/c/|/categoria/)")
+
 
 def _normalize_ml_url(url: str) -> str:
     """Redireciona produto.mercadolivre.com.br para www — o subdomínio de anúncios tem proteção mais agressiva."""
@@ -66,6 +72,7 @@ class MercadoLivreAdapter(MarketplaceAdapter):
         )
 
     async def extract(self, page: CollectedPage) -> ScrapeResult | ScrapeError:
+        # Flags de bloqueio já detectadas pelo browser durante a navegação
         if page.captcha_detected:
             return ScrapeError(
                 error_code=ErrorCode.CAPTCHA_DETECTED,
@@ -104,13 +111,38 @@ class MercadoLivreAdapter(MarketplaceAdapter):
 
         sel = Selector(page.html)
 
-        if _is_search_page(sel):
+        # Classificação explícita do tipo de página antes de qualquer extração
+        page_type = _classify_page(page.final_url or page.url, sel)
+
+        if page_type != "PRODUCT":
+            _contaminated = page_type in ("CAPTCHA", "BLOCKED", "VERIFICATION", "SEARCH_RESULTS")
+            if _contaminated:
+                await self._browser.reset_context(self.marketplace)
+
+            _error_map = {
+                "CAPTCHA": (ErrorCode.CAPTCHA_DETECTED, True, "Página de verificação/CAPTCHA detectada"),
+                "BLOCKED": (ErrorCode.BLOCKED, True, "Acesso bloqueado pelo marketplace"),
+                "VERIFICATION": (ErrorCode.BLOCKED, True, "Redirecionado para página de verificação de identidade"),
+                "SEARCH_RESULTS": (ErrorCode.REDIRECT_TO_SEARCH, False, "URL redirecionou para busca ou categoria"),
+                "NOT_FOUND": (ErrorCode.UNAVAILABLE, False, "Produto não encontrado"),
+                "UNKNOWN": (ErrorCode.LAYOUT_CHANGED, True, "Página sem estrutura de produto reconhecível"),
+            }
+            error_code, retryable, msg = _error_map.get(
+                page_type, (ErrorCode.LAYOUT_CHANGED, True, f"Tipo de página não suportado: {page_type}")
+            )
+            logger.warning(
+                "ml_pagina_classificada_nao_produto",
+                page_type=page_type,
+                final_url=page.final_url,
+                url=page.url,
+                reset_context=_contaminated,
+            )
             return ScrapeError(
-                error_code=ErrorCode.REDIRECT_TO_SEARCH,
+                error_code=error_code,
                 marketplace=self.marketplace,
                 url=page.url,
-                retryable=False,
-                message="URL redirecionou para página de busca ou categoria",
+                retryable=retryable,
+                message=msg,
             )
 
         if _is_unavailable(sel):
@@ -140,15 +172,6 @@ class MercadoLivreAdapter(MarketplaceAdapter):
             price, method, confidence = _extract_price_from_dom(sel)
 
         if price is None or price <= 0:
-            if page.html and _is_challenge_page(sel):
-                await self._browser.reset_context(self.marketplace)
-                return ScrapeError(
-                    error_code=ErrorCode.CAPTCHA_DETECTED,
-                    marketplace=self.marketplace,
-                    url=page.url,
-                    retryable=True,
-                    message="Página sem estrutura de produto ML — possível soft-block",
-                )
             return ScrapeError(
                 error_code=ErrorCode.PRICE_NOT_FOUND,
                 marketplace=self.marketplace,
@@ -210,17 +233,36 @@ class MercadoLivreAdapter(MarketplaceAdapter):
 # Funções auxiliares de detecção
 # ---------------------------------------------------------------------------
 
-def _is_search_page(sel: Selector) -> bool:
-    return bool(
-        sel.css(".ui-search-results, .ui-search-layout, #search-results").get()
-    )
+def _classify_page(url: str, sel: Selector) -> str:
+    """Classifica o tipo da página ANTES de tentar extração de preço.
 
+    Retorna um de: PRODUCT | CAPTCHA | BLOCKED | SEARCH_RESULTS | VERIFICATION | NOT_FOUND | UNKNOWN
+    """
+    # Redirect para páginas de identidade/login/verificação via URL final
+    if _REDIRECT_PATTERNS.search(url):
+        return "VERIFICATION"
 
-def _is_challenge_page(sel: Selector) -> bool:
-    """Página sem nenhum marker de produto ML indica soft-block ou challenge."""
-    return not bool(
-        sel.css(".ui-pdp-container, .andes-money-amount, .poly-card__portals, .ui-pdp-title").get()
-    )
+    # Redirect para busca via URL final
+    if _SEARCH_URL_PATTERNS.search(url):
+        return "SEARCH_RESULTS"
+
+    # Página de busca pelo conteúdo HTML
+    if sel.css(".ui-search-results, .ui-search-layout, #search-results").get():
+        return "SEARCH_RESULTS"
+
+    # CAPTCHA / challenge via conteúdo
+    if sel.css("[data-testid='challenge'], #security-challenge, .challenge-form").get():
+        return "CAPTCHA"
+    challenge_text = (sel.css("body").get() or "").lower()
+    if any(phrase in challenge_text for phrase in ("recaptcha", "são você um robô", "are you a robot", "verificação de segurança")):
+        return "CAPTCHA"
+
+    # Página de produto reconhecível (qualquer um dos markers)
+    if sel.css(".ui-pdp-container, .ui-pdp-title, .andes-money-amount, .poly-card__portals, .poly-component__price").get():
+        return "PRODUCT"
+
+    # Nenhum marker de produto — soft-block ou layout desconhecido
+    return "UNKNOWN"
 
 
 def _is_unavailable(sel: Selector) -> bool:

@@ -23,6 +23,9 @@ class NotificationLogRead(BaseModel):
     new_status: str | None
     old_ranking: int | None
     new_ranking: int | None
+    market_min_old: Decimal | None
+    market_min_new: Decimal | None
+    reason_codes: list[str] | None
     competitor_id: uuid.UUID | None
     run_id: str | None
     run_status: str | None

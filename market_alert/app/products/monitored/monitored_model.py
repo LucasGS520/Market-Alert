@@ -53,6 +53,7 @@ class MonitoredProduct(Base):
     collection_lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_collection_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_collection_finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_successful_collection_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     consecutive_failures: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     next_check_reason: Mapped[str | None] = mapped_column(String(64), nullable=True)
 

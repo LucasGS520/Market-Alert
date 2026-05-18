@@ -1,6 +1,6 @@
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from urllib.parse import urlparse
 
@@ -15,7 +15,15 @@ from app.infra.scraper_errors import classify_scraper_error
 from app.products.competitor.competitor_model import Competitor
 from app.products.monitored.monitored_model import MonitoredProduct
 from app.products.price_history.price_model import PriceHistory
-from app.workers.redis import acquire_lock, check_rate_limit, release_lock, set_domain_cooldown
+from app.workers.redis import (
+    acquire_lock,
+    check_rate_limit,
+    close_domain_circuit,
+    get_remaining_circuit_cooldown,
+    is_domain_open,
+    open_domain_circuit,
+    release_lock,
+)
 
 logger = structlog.get_logger()
 
@@ -114,6 +122,19 @@ async def collect_competitor(
         logger.info("coleta_ignorada_status", concorrente_id=str(competitor.id), status=competitor.status)
         return {"success": False, "reason": "ineligible_status"}
 
+    dominio = urlparse(competitor.url_original).netloc
+
+    # Verifica circuit breaker antes do lock — mesmo domínio pode estar bloqueado
+    if is_domain_open(redis, dominio):
+        remaining_ttl = get_remaining_circuit_cooldown(redis, dominio)
+        logger.info(
+            "coleta_concorrente_dominio_circuit_open",
+            dominio=dominio,
+            concorrente_id=str(competitor.id),
+            remaining_ttl=remaining_ttl,
+        )
+        return {"success": False, "reason": "domain_circuit_open"}
+
     chave_lock = f"lock:collect:{competitor.id}"
     lock_token = acquire_lock(redis, chave_lock, timeout=300)
     if not lock_token:
@@ -123,7 +144,6 @@ async def collect_competitor(
     logger.info("lock_adquirido_concorrente", concorrente_id=str(competitor.id))
 
     try:
-        dominio = urlparse(competitor.url_original).netloc
         if not check_rate_limit(redis, dominio):
             from app.infra.config import settings
 
@@ -173,7 +193,11 @@ async def collect_competitor(
             )
 
             if cls.domain_cooldown:
-                set_domain_cooldown(redis, dominio)
+                open_domain_circuit(redis, dominio)
+                competitor.status = "error"
+                competitor.last_checked_at = now
+                await session.commit()
+                raise  # re-raise para collector_task detectar e marcar failed na rodada
 
             competitor.last_checked_at = now
 
@@ -218,6 +242,7 @@ async def collect_competitor(
             competitor.current_price = float(novo_preco)
             competitor.is_available = True
             competitor.last_checked_at = now
+            close_domain_circuit(redis, dominio)
 
             if resultado.title and not competitor.name:
                 competitor.name = resultado.title

@@ -22,13 +22,14 @@ from sqlalchemy import select
 
 from app.infra.clients.scraper import ScraperClient, ScraperParseError, ScraperUnavailableError
 from app.infra.database import AsyncSessionLocal
+from app.infra.scraper_errors import classify_scraper_error
 from app.products.competitor.competitor_model import Competitor
 from app.products.monitored.monitored_model import MonitoredProduct
 from app.products.monitored.monitored_service import collect_product
 from app.workers.async_utils import run_async_task
 from app.workers.celery_app import celery_app
 from app.workers.collection_run import start_run
-from app.workers.redis import get_redis
+from app.workers.redis import get_redis, is_domain_open
 
 logger = structlog.get_logger()
 
@@ -96,6 +97,18 @@ def collection_orchestrator_task(self: Task, product_id: str) -> None:
             except ScraperUnavailableError as exc:
                 raise self.retry(exc=exc)
             except ScraperParseError as exc:
+                cls = classify_scraper_error(exc.error_result.error_code)
+                if cls.domain_cooldown:
+                    # next_check_at já foi definido em collect_product com o cooldown escalado.
+                    # Não agendar retry Celery — o scheduler retomará após o cooldown expirar.
+                    _liberar_lease(produto)
+                    await session.commit()
+                    logger.warning(
+                        "orquestrador_domain_blocked_sem_retry",
+                        produto_id=product_id,
+                        error_code=exc.error_result.error_code,
+                    )
+                    return
                 if exc.error_result.retryable:
                     raise self.retry(exc=exc)
                 _liberar_lease(produto)
@@ -124,6 +137,9 @@ def collection_orchestrator_task(self: Task, product_id: str) -> None:
             await session.refresh(produto)
             preco_novo = Decimal(str(produto.current_price)) if produto.current_price else None
 
+            from urllib.parse import urlparse as _urlparse
+            dominio = _urlparse(produto.url_original).netloc
+
             concorrentes_result = await session.execute(
                 select(Competitor).where(
                     Competitor.monitored_id == pid,
@@ -134,20 +150,29 @@ def collection_orchestrator_task(self: Task, product_id: str) -> None:
 
             rodada_id: str | None = None
             if concorrentes:
-                rodada_id = str(uuid.uuid4())
-                ids = [str(c.id) for c in concorrentes]
-                start_run(
-                    redis, rodada_id, product_id, ids,
-                    timeout=settings.collection_run_timeout_seconds,
-                )
-                for c in concorrentes:
-                    collector_task.delay(competitor_id=str(c.id), run_id=rodada_id)
-                logger.info(
-                    "orquestrador_rodada_iniciada",
-                    produto_id=product_id,
-                    run_id=rodada_id,
-                    total_concorrentes=len(concorrentes),
-                )
+                if is_domain_open(redis, dominio):
+                    # Domínio ainda bloqueado: pula rodada de concorrentes para não criar
+                    # uma collection_run que vai expirar com todos como "deferred".
+                    logger.info(
+                        "orquestrador_dominio_degradado_concorrentes_pulados",
+                        produto_id=product_id,
+                        total_concorrentes=len(concorrentes),
+                    )
+                else:
+                    rodada_id = str(uuid.uuid4())
+                    ids = [str(c.id) for c in concorrentes]
+                    start_run(
+                        redis, rodada_id, product_id, ids,
+                        timeout=settings.collection_run_timeout_seconds,
+                    )
+                    for c in concorrentes:
+                        collector_task.delay(competitor_id=str(c.id), run_id=rodada_id)
+                    logger.info(
+                        "orquestrador_rodada_iniciada",
+                        produto_id=product_id,
+                        run_id=rodada_id,
+                        total_concorrentes=len(concorrentes),
+                    )
 
             comparison_task.delay(
                 monitored_id=product_id,

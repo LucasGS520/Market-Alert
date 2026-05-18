@@ -1,6 +1,6 @@
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from urllib.parse import urlparse
 
@@ -15,7 +15,16 @@ from app.infra.scraper_errors import classify_scraper_error
 from app.products.monitored.monitored_model import MonitoredProduct
 from app.products.price_history.price_model import PriceHistory
 from app.scheduling.policy import CheckReason, classify_stability, compute_next_check, is_significant_change
-from app.workers.redis import acquire_lock, check_rate_limit, release_lock, set_domain_cooldown
+from app.workers.redis import (
+    acquire_lock,
+    check_rate_limit,
+    close_domain_circuit,
+    get_remaining_circuit_cooldown,
+    is_domain_open,
+    open_domain_circuit,
+    record_collection_attempt,
+    release_lock,
+)
 
 logger = structlog.get_logger()
 
@@ -27,6 +36,53 @@ async def list_products(session: AsyncSession) -> list[MonitoredProduct]:
         select(MonitoredProduct).order_by(MonitoredProduct.created_at.desc())
     )
     return list(resultado.scalars().all())
+
+
+async def list_products_with_comparisons(
+    session: AsyncSession,
+) -> list[tuple["MonitoredProduct", "Comparison | None", int]]:
+    from sqlalchemy import func
+    from app.comparison.comparison_model import Comparison
+    from app.products.competitor.competitor_model import Competitor
+
+    products_q = await session.execute(
+        select(MonitoredProduct).order_by(MonitoredProduct.created_at.desc())
+    )
+    products = list(products_q.scalars().all())
+    if not products:
+        return []
+
+    product_ids = [p.id for p in products]
+
+    latest_calc_subq = (
+        select(
+            Comparison.monitored_id,
+            func.max(Comparison.calculated_at).label("max_calc"),
+        )
+        .where(Comparison.monitored_id.in_(product_ids))
+        .group_by(Comparison.monitored_id)
+        .subquery()
+    )
+    latest_comparisons_q = await session.execute(
+        select(Comparison).join(
+            latest_calc_subq,
+            (Comparison.monitored_id == latest_calc_subq.c.monitored_id)
+            & (Comparison.calculated_at == latest_calc_subq.c.max_calc),
+        )
+    )
+    latest_by_product = {c.monitored_id: c for c in latest_comparisons_q.scalars().all()}
+
+    counts_q = await session.execute(
+        select(Competitor.monitored_id, func.count(Competitor.id).label("cnt"))
+        .where(Competitor.monitored_id.in_(product_ids))
+        .group_by(Competitor.monitored_id)
+    )
+    competitor_counts = {row.monitored_id: row.cnt for row in counts_q}
+
+    return [
+        (p, latest_by_product.get(p.id), competitor_counts.get(p.id, 0))
+        for p in products
+    ]
 
 
 async def create_product(session: AsyncSession, url: str, name: str | None) -> MonitoredProduct:
@@ -123,6 +179,26 @@ async def collect_product(
         logger.info("coleta_ignorada_status", produto_id=str(product.id), status=product.status)
         return {"success": False, "reason": "ineligible_status"}
 
+    dominio = urlparse(product.url_original).netloc
+
+    # Verifica circuit breaker ANTES do lock — domínio pode estar em cooldown escalado
+    if is_domain_open(redis, dominio):
+        now = datetime.now(timezone.utc)
+        remaining_ttl = get_remaining_circuit_cooldown(redis, dominio)
+        if remaining_ttl > 0:
+            product.next_check_at = now + timedelta(seconds=remaining_ttl + 60)
+            product.last_scheduled_delay_minutes = (remaining_ttl + 60) // 60
+        product.next_check_reason = "domain_blocked"
+        await session.commit()
+        logger.info(
+            "coleta_dominio_circuit_open",
+            dominio=dominio,
+            produto_id=str(product.id),
+            remaining_ttl=remaining_ttl,
+        )
+        record_collection_attempt(redis, str(product.id), "domain_circuit_open", dominio)
+        return {"success": False, "reason": "domain_circuit_open"}
+
     chave_lock = f"lock:collect:{product.id}"
     lock_token = acquire_lock(redis, chave_lock, timeout=300)
     if not lock_token:
@@ -150,7 +226,6 @@ async def collect_product(
     logger.info("lock_adquirido", produto_id=str(product.id))
 
     try:
-        dominio = urlparse(product.url_original).netloc
         if not check_rate_limit(redis, dominio):
             now = datetime.now(timezone.utc)
             logger.info(
@@ -231,7 +306,26 @@ async def collect_product(
             )
 
             if cls.domain_cooldown:
-                set_domain_cooldown(redis, dominio)
+                # Abre circuit breaker escalável e agenda próxima coleta APÓS o cooldown.
+                # O orchestrator detecta domain_cooldown e não agenda Celery retry — o
+                # scheduler retomará quando next_check_at expirar.
+                cooldown_s = open_domain_circuit(redis, dominio)
+                product.status = "error"
+                product.last_checked_at = now
+                product.consecutive_failures = (product.consecutive_failures or 0) + 1
+                product.next_check_at = now + timedelta(seconds=cooldown_s + 60)
+                product.last_scheduled_delay_minutes = (cooldown_s + 60) // 60
+                product.next_check_reason = "domain_blocked"
+                await session.commit()
+                logger.warning(
+                    "domain_blocked_next_check_agendado",
+                    produto_id=str(product.id),
+                    dominio=dominio,
+                    cooldown_s=cooldown_s,
+                    next_check_at=str(product.next_check_at),
+                )
+                record_collection_attempt(redis, str(product.id), "captcha" if error_code == "CAPTCHA_DETECTED" else "blocked", dominio)
+                raise  # re-raise para o orchestrator detectar e NÃO agendar retry Celery
 
             product.last_checked_at = now
 
@@ -334,6 +428,10 @@ async def collect_product(
             product.status = "active"
             product.last_checked_at = now
             product.consecutive_failures = 0
+            # Fecha circuit breaker se o domínio estava com falhas acumuladas
+            close_domain_circuit(redis, dominio)
+            product.last_successful_collection_at = now
+            record_collection_attempt(redis, str(product.id), "success", dominio)
 
             if resultado.title and not product.name:
                 product.name = resultado.title

@@ -48,7 +48,7 @@ services:
     volumes:
       - scraper_session_state:/app/.session_state
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8001/ready || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://localhost:8001/live || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 72
@@ -106,7 +106,7 @@ services:
       market_alert_migrate:
         condition: service_completed_successfully
       market_scraper:
-        condition: service_healthy
+        condition: service_started
 
   market_alert_comparison_worker:
     image: market_alert:local
@@ -154,6 +154,19 @@ services:
         condition: service_healthy
       market_alert_migrate:
         condition: service_completed_successfully
+
+  frontend:
+    image: nginx:alpine
+    ports:
+      - "3000:80"
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+      - ./frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - market_net
+    depends_on:
+      market_alert_api:
+        condition: service_healthy
 
 networks:
   market_net:

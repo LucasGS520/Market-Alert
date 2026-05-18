@@ -3,7 +3,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field
+from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, computed_field
 
 from app.comparison.comparison_schemas import ComparisonRead
 
@@ -26,6 +26,7 @@ class MonitoredProductRead(BaseModel):
     next_check_at: datetime | None
     next_check_reason: str | None
     last_checked_at: datetime | None
+    last_successful_collection_at: datetime | None
     last_collection_started_at: datetime | None
     last_collection_finished_at: datetime | None
     collection_lease_until: datetime | None
@@ -33,9 +34,16 @@ class MonitoredProductRead(BaseModel):
     check_interval_minutes: int
     created_at: datetime
 
+    @computed_field
+    @property
+    def is_price_stale(self) -> bool:
+        """True quando current_price existe mas a última coleta bem-sucedida é anterior ao erro atual."""
+        return self.current_price is not None and self.status in ("error", "unavailable")
+
 
 class MonitoredProductDetail(MonitoredProductRead):
     latest_comparison: ComparisonRead | None = None
+    competitors_count: int = 0
 
 
 class MonitoredProductPatch(BaseModel):

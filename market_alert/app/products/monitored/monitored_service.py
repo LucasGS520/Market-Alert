@@ -174,7 +174,7 @@ async def collect_product(
         logger.info("coleta_ignorada_status", produto_id=_pid_str, status=product.status)
         return {"success": False, "reason": "ineligible_status"}
 
-    dominio = urlparse(product.url_original).netloc
+    dominio = urlparse(product.url_normalized).netloc
 
     chave_lock = f"lock:collect:{product.id}"
     lock_token = acquire_lock(redis, chave_lock, timeout=300)
@@ -185,10 +185,10 @@ async def collect_product(
     logger.info("lock_adquirido", produto_id=str(product.id))
 
     try:
-        logger.info("iniciando_coleta", produto_id=str(product.id), url=product.url_original)
+        logger.info("iniciando_coleta", produto_id=str(product.id), url=product.url_normalized)
 
         try:
-            resultado = await scraper.parse(product.url_original)
+            resultado = await scraper.parse(product.url_normalized)
         except ScraperUnavailableError as exc:
             now = datetime.now(timezone.utc)
             logger.warning(
@@ -219,6 +219,7 @@ async def collect_product(
                 produto_id=str(product.id),
                 error_code=error_code,
                 marketplace=exc.error_result.marketplace,
+                retryable=exc.error_result.retryable,
             )
 
             product.last_checked_at = now
@@ -263,6 +264,20 @@ async def collect_product(
                 await session.commit()
                 logger.info("produto_nao_suportado", produto_id=str(product.id))
                 return {"success": False, "reason": "unsupported"}
+
+            if error_code in ("BLOCKED", "CAPTCHA_DETECTED"):
+                product.status = "error"
+                product.consecutive_failures = (product.consecutive_failures or 0) + 1
+                product.next_check_at = now + timedelta(minutes=product.check_interval_minutes)
+                product.last_scheduled_delay_minutes = product.check_interval_minutes
+                product.next_check_reason = "error_backoff"
+                try:
+                    await session.commit()
+                except StaleDataError:
+                    await session.rollback()
+                    logger.warning("stale_data_no_commit_parse_error", produto_id=_pid_str)
+                logger.warning("coleta_bloqueada", produto_id=str(product.id), error_code=error_code)
+                return {"success": False, "reason": "blocked", "error_code": error_code}
 
             # Qualquer outro erro de parse: status=error, intervalo normal, sem retry
             product.status = "error"

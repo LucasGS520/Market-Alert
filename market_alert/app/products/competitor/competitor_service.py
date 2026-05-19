@@ -123,11 +123,11 @@ async def collect_competitor(
     logger.info("lock_adquirido_concorrente", concorrente_id=str(competitor.id))
 
     try:
-        logger.info("iniciando_coleta_concorrente", concorrente_id=str(competitor.id), url=competitor.url_original)
+        logger.info("iniciando_coleta_concorrente", concorrente_id=str(competitor.id), url=competitor.url_normalized)
 
         previous_is_available = competitor.is_available
         try:
-            resultado = await scraper.parse(competitor.url_original)
+            resultado = await scraper.parse(competitor.url_normalized)
         except ScraperUnavailableError as exc:
             from app.infra.config import settings
 
@@ -150,6 +150,7 @@ async def collect_competitor(
                 "scraper_erro_semantico_concorrente",
                 concorrente_id=str(competitor.id),
                 error_code=error_code,
+                retryable=exc.error_result.retryable,
             )
 
             competitor.last_checked_at = now
@@ -165,6 +166,12 @@ async def collect_competitor(
                 competitor.status = "unsupported"
                 await session.commit()
                 return {"success": False, "reason": "unsupported"}
+
+            if error_code in ("BLOCKED", "CAPTCHA_DETECTED"):
+                competitor.status = "error"
+                await session.commit()
+                logger.warning("coleta_bloqueada_concorrente", concorrente_id=str(competitor.id), error_code=error_code)
+                return {"success": False, "reason": "blocked", "error_code": error_code}
 
             # Qualquer outro erro de parse: status=error, sem retry
             competitor.status = "error"

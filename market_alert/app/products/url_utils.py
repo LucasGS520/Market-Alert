@@ -1,3 +1,4 @@
+import re
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 _TRACKING_PARAMS = frozenset({
@@ -23,10 +24,21 @@ _HOST_REMAP: dict[str, str] = {
 }
 
 
+_ML_JM_RE = re.compile(r"_JM$", re.IGNORECASE)
+_ML_ITEM_ID_RE = re.compile(r"MLB-?(\d+)", re.IGNORECASE)
+
+
 def normalize_url(url: str) -> str:
     parsed = urlparse(url)
     netloc = parsed.netloc.lower()
     netloc = _HOST_REMAP.get(netloc, netloc)
+
+    # URLs publicitárias do ML (_JM) → URL canônica /p/MLB{ID}
+    if _ML_JM_RE.search(parsed.path) and "mercadolivre.com.br" in netloc:
+        m = _ML_ITEM_ID_RE.search(parsed.path)
+        if m:
+            return f"https://{netloc}/p/MLB{m.group(1)}"
+
     qs = {
         k: v
         for k, v in parse_qs(parsed.query, keep_blank_values=True).items()

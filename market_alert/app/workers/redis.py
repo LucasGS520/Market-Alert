@@ -41,92 +41,6 @@ def release_lock(redis: Redis, key: str, token: str) -> None:
         logger.warning("lock_release_ignorado", key=key, motivo="token_divergente_ou_expirado")
 
 
-# ── Rate limit por domínio (burst control) ────────────────────────────────────
-
-def check_rate_limit(redis: Redis, domain: str) -> bool:
-    """Controle de burst: True se pode prosseguir, False se requisição em andamento (2s TTL).
-
-    Separado do circuit breaker — cobre apenas a janela de burst de 2s entre coletas.
-    Para bloqueio por CAPTCHA/block use is_domain_open() / open_domain_circuit().
-    """
-    key = f"ratelimit:domain:{domain}"
-    if redis.exists(key):
-        return False
-    redis.set(key, "1", ex=settings.domain_rate_limit_ttl_seconds)
-    return True
-
-
-# ── Circuit Breaker de domínio (estado escalável) ──────────────────────────────
-
-def _circuit_key(domain: str) -> str:
-    return f"domain:circuit:{domain}"
-
-
-def _failures_key(domain: str) -> str:
-    return f"domain:failures:{domain}"
-
-
-def get_domain_circuit_state(redis: Redis, domain: str) -> str:
-    """Retorna 'OPEN' se o circuito está aberto, 'CLOSED' se pode operar."""
-    return "OPEN" if redis.exists(_circuit_key(domain)) else "CLOSED"
-
-
-def is_domain_open(redis: Redis, domain: str) -> bool:
-    """True se o domínio está com circuito OPEN (bloqueado)."""
-    return bool(redis.exists(_circuit_key(domain)))
-
-
-def open_domain_circuit(redis: Redis, domain: str) -> int:
-    """Abre (ou escala) o circuit breaker do domínio após CAPTCHA/bloqueio.
-
-    Incrementa o contador de falhas consecutivas e aplica cooldown escalonado:
-    - 1ª falha: tier1 (padrão 300s)
-    - 2ª falha: tier2 (padrão 600s)
-    - 3ª+ falha: tier3 (padrão 1200s)
-
-    Returns:
-        cooldown_seconds aplicado.
-    """
-    failures_key = _failures_key(domain)
-    failures = redis.incr(failures_key)
-    redis.expire(failures_key, settings.domain_circuit_failure_ttl)
-
-    if failures == 1:
-        ttl = settings.domain_circuit_cooldown_tier1
-    elif failures == 2:
-        ttl = settings.domain_circuit_cooldown_tier2
-    else:
-        ttl = settings.domain_circuit_cooldown_tier3
-
-    redis.set(_circuit_key(domain), str(failures), ex=ttl)
-    logger.warning(
-        "domain_circuit_opened",
-        dominio=domain,
-        falhas_consecutivas=failures,
-        cooldown_segundos=ttl,
-    )
-    return ttl
-
-
-def close_domain_circuit(redis: Redis, domain: str) -> None:
-    """Fecha o circuit breaker após coleta bem-sucedida em domínio recuperado."""
-    had_failures = redis.exists(_failures_key(domain))
-    redis.delete(_circuit_key(domain), _failures_key(domain))
-    if had_failures:
-        logger.info("domain_circuit_closed", dominio=domain)
-
-
-def get_remaining_circuit_cooldown(redis: Redis, domain: str) -> int:
-    """Retorna segundos restantes do cooldown do circuito (0 se CLOSED ou expirado)."""
-    ttl = redis.ttl(_circuit_key(domain))
-    return max(ttl, 0)
-
-
-def set_domain_cooldown(redis: Redis, domain: str) -> None:
-    """Compatibilidade: abre o circuit breaker escalável. Use open_domain_circuit() diretamente."""
-    open_domain_circuit(redis, domain)
-
-
 # ── Cooldown de notificações ───────────────────────────────────────────────────
 # Granularidade: produto + tipo de evento (+ concorrente para eventos tier 2).
 # Cooldown de um evento não bloqueia outros eventos do mesmo produto.
@@ -164,6 +78,23 @@ def set_cooldown(
 # ── Tentativas de coleta (auditoria lightweight) ───────────────────────────────
 
 _COLLECTION_ATTEMPTS_MAX = 10  # máximo de tentativas mantidas por entidade
+
+
+def get_collection_attempts(redis: Redis, entity_id: str) -> list[dict]:
+    """Retorna as últimas tentativas de coleta de uma entidade (produto ou concorrente).
+
+    Returns:
+        Lista de dicts com keys: ts, outcome, domain. Mais recente primeiro.
+    """
+    key = f"collection:attempts:{entity_id}"
+    raw = redis.lrange(key, 0, _COLLECTION_ATTEMPTS_MAX - 1)
+    result = []
+    for entry in raw:
+        try:
+            result.append(json.loads(entry))
+        except (ValueError, TypeError):
+            continue
+    return result
 
 
 def record_collection_attempt(

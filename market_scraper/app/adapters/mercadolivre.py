@@ -22,9 +22,10 @@ logger = structlog.get_logger()
 
 _PRODUCT_ID_RE = re.compile(r"MLB[A-Z]?-?\d+", re.IGNORECASE)
 
-# Padrões de URL que indicam redirecionamento para páginas não-produto
+# Padrões de URL que indicam redirecionamento para páginas não-produto.
+# /gz/ cobre account-verification e outros soft-blocks no path /gz/...
 _REDIRECT_PATTERNS = re.compile(
-    r"(/identity/|/login|/security|/verification|/checkout/|/seller-registration)"
+    r"(/identity/|/login|/security|/verification|/checkout/|/seller-registration|/gz/)"
 )
 _SEARCH_URL_PATTERNS = re.compile(r"(/search\?|/listado/|/c/|/categoria/)")
 

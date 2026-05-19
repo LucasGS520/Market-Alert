@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urlparse
 
 import structlog
 from redis import Redis
@@ -81,7 +82,12 @@ async def run_scheduler(session: AsyncSession, redis: Redis) -> dict:
 
     # Seleciona apenas os campos necessários, ordenado por prioridade temporal
     id_result = await session.execute(
-        select(MonitoredProduct.id, MonitoredProduct.status, MonitoredProduct.next_check_at)
+        select(
+            MonitoredProduct.id,
+            MonitoredProduct.status,
+            MonitoredProduct.next_check_at,
+            MonitoredProduct.url_normalized,
+        )
         .where(
             and_(
                 MonitoredProduct.status.in_(_ELIGIBLE_STATUSES),
@@ -96,11 +102,24 @@ async def run_scheduler(session: AsyncSession, redis: Redis) -> dict:
 
     total_encontrados = len(candidatos)
     total_enfileirados = 0
-    skips: dict[str, int] = {"lease_ativo": 0}
+    skips: dict[str, int] = {"lease_ativo": 0, "domain_cap": 0}
+    domain_counts: dict[str, int] = {}
 
     for row in candidatos:
         pid = row.id
         pid_str = str(pid)
+
+        # Cap por domínio: distribui slots do batch entre domínios distintos
+        dominio = urlparse(row.url_normalized or "").netloc or "unknown"
+        if domain_counts.get(dominio, 0) >= settings.scheduler_max_per_domain:
+            logger.debug(
+                "scheduler_skip_domain_cap",
+                produto_id=pid_str,
+                dominio=dominio,
+                cap=settings.scheduler_max_per_domain,
+            )
+            skips["domain_cap"] += 1
+            continue
 
         task_id = await enqueue_with_lease(session, pid)
 
@@ -113,11 +132,13 @@ async def run_scheduler(session: AsyncSession, redis: Redis) -> dict:
             skips["lease_ativo"] += 1
             continue
 
+        domain_counts[dominio] = domain_counts.get(dominio, 0) + 1
         total_enfileirados += 1
         logger.debug(
             "scheduler_enfileirado",
             produto_id=pid_str,
             status=row.status,
+            dominio=dominio,
             next_check_at=row.next_check_at.isoformat() if row.next_check_at else None,
             tarefa_id=task_id,
         )

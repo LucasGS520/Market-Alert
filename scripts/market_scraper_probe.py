@@ -45,6 +45,7 @@ DEFAULT_URLS = [
     "https://www.mercadolivre.com.br/kit-lanterna-traseira-led-hilux-16-17-18-19-20-21-22-23-24/up/MLBU3329266942",
     "https://www.mercadolivre.com.br/par-farol-palio-2008-2009-2010-siena-08-2009-2010-2011--reto/up/MLBU729640320",
     "https://www.mercadolivre.com.br/par-farol-uno-mille-fire-economy-way-04-2005-2006-2007-2008/up/MLBU729679580",
+    "https://produto.mercadolivre.com.br/MLB-2674274038-farol-fiat-uno-2004-2005-2006-2007-2008-09-mascara-negra-_JM?searchVariation=174625113652&pdp_filters=seller_id%3A193163363#polycard_client%3Drecommendations_recoview-selleritems-eshops%26reco_backend%3Dsame-seller-odin%26reco_client%3Drecoview-selleritems-eshops%26reco_item_pos%3D4%26reco_backend_type%3Dlow_level%26reco_id%3D74eed334-741b-46b0-8711-47c5995da073%26tracking_id%3D89ecd568305f49bafdb849c0e47dbe83%26source%3Deshops%26seller_id%3D193163363%26category_id%3DMLB7863",
 ]
 
 DEFAULT_API_URL = "http://127.0.0.1:8001/scraper/parse"

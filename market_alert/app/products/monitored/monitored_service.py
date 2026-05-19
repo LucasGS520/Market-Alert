@@ -8,20 +8,15 @@ import structlog
 from fastapi import HTTPException
 from redis import Redis
 from sqlalchemy import select
+from sqlalchemy.orm.exc import StaleDataError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infra.clients.scraper import ScraperClient, ScraperParseError, ScraperUnavailableError
-from app.infra.scraper_errors import classify_scraper_error
 from app.products.monitored.monitored_model import MonitoredProduct
 from app.products.price_history.price_model import PriceHistory
 from app.scheduling.policy import CheckReason, classify_stability, compute_next_check, is_significant_change
 from app.workers.redis import (
     acquire_lock,
-    check_rate_limit,
-    close_domain_circuit,
-    get_remaining_circuit_cooldown,
-    is_domain_open,
-    open_domain_circuit,
     record_collection_attempt,
     release_lock,
 )
@@ -168,96 +163,29 @@ async def collect_product(
     Returns:
         dict com chave "success" (bool) e campos adicionais por resultado.
     Raises:
-        ScraperUnavailableError: scraper inacessível — Celery deve retentar.
-        ScraperParseError: erro retryable do scraper — Celery deve retentar.
+        ScraperUnavailableError: scraper inacessível — Celery deve retentar (max 1x).
     """
     from app.infra.config import settings
 
     inicio = time.monotonic()
+    _pid_str = str(product.id)
 
     if product.status in ("paused", "unsupported"):
-        logger.info("coleta_ignorada_status", produto_id=str(product.id), status=product.status)
+        logger.info("coleta_ignorada_status", produto_id=_pid_str, status=product.status)
         return {"success": False, "reason": "ineligible_status"}
 
     dominio = urlparse(product.url_original).netloc
 
-    # Verifica circuit breaker ANTES do lock — domínio pode estar em cooldown escalado
-    if is_domain_open(redis, dominio):
-        now = datetime.now(timezone.utc)
-        remaining_ttl = get_remaining_circuit_cooldown(redis, dominio)
-        if remaining_ttl > 0:
-            product.next_check_at = now + timedelta(seconds=remaining_ttl + 60)
-            product.last_scheduled_delay_minutes = (remaining_ttl + 60) // 60
-        product.next_check_reason = "domain_blocked"
-        await session.commit()
-        logger.info(
-            "coleta_dominio_circuit_open",
-            dominio=dominio,
-            produto_id=str(product.id),
-            remaining_ttl=remaining_ttl,
-        )
-        record_collection_attempt(redis, str(product.id), "domain_circuit_open", dominio)
-        return {"success": False, "reason": "domain_circuit_open"}
-
     chave_lock = f"lock:collect:{product.id}"
     lock_token = acquire_lock(redis, chave_lock, timeout=300)
     if not lock_token:
-        now = datetime.now(timezone.utc)
         logger.info("coleta_pulada_lock_ativo", produto_id=str(product.id))
-        next_dt, delay = compute_next_check(
-            reason="lock_busy",
-            now=now,
-            stability_level=product.stability_level,
-            last_scheduled_delay_minutes=product.last_scheduled_delay_minutes,
-            consecutive_failures=product.consecutive_failures or 0,
-            base_backoff_minutes=settings.collection_retry_base_delay_minutes,
-            max_backoff_minutes=settings.collection_retry_max_delay_minutes,
-            rate_limit_min=settings.rate_limit_reschedule_min_minutes,
-            rate_limit_max=settings.rate_limit_reschedule_max_minutes,
-            lock_busy_min=settings.lock_busy_reschedule_min_minutes,
-            lock_busy_max=settings.lock_busy_reschedule_max_minutes,
-        )
-        product.next_check_at = next_dt
-        product.last_scheduled_delay_minutes = delay
-        product.next_check_reason = "lock_busy"
-        await session.commit()
         return {"success": False, "reason": "lock_busy"}
 
     logger.info("lock_adquirido", produto_id=str(product.id))
 
     try:
-        if not check_rate_limit(redis, dominio):
-            now = datetime.now(timezone.utc)
-            logger.info(
-                "coleta_rate_limited",
-                dominio=dominio,
-                produto_id=str(product.id),
-                ttl_s=settings.domain_rate_limit_ttl_seconds,
-            )
-            next_dt, delay = compute_next_check(
-                reason="rate_limited",
-                now=now,
-                stability_level=product.stability_level,
-                last_scheduled_delay_minutes=product.last_scheduled_delay_minutes,
-                consecutive_failures=product.consecutive_failures or 0,
-                base_backoff_minutes=settings.collection_retry_base_delay_minutes,
-                max_backoff_minutes=settings.collection_retry_max_delay_minutes,
-                rate_limit_min=settings.rate_limit_reschedule_min_minutes,
-                rate_limit_max=settings.rate_limit_reschedule_max_minutes,
-                lock_busy_min=settings.lock_busy_reschedule_min_minutes,
-                lock_busy_max=settings.lock_busy_reschedule_max_minutes,
-            )
-            product.next_check_at = next_dt
-            product.last_scheduled_delay_minutes = delay
-            product.next_check_reason = "rate_limited"
-            await session.commit()
-            return {"success": False, "reason": "rate_limited"}
-
-        logger.info(
-            "iniciando_coleta",
-            produto_id=str(product.id),
-            url=product.url_original,
-        )
+        logger.info("iniciando_coleta", produto_id=str(product.id), url=product.url_original)
 
         try:
             resultado = await scraper.parse(product.url_original)
@@ -272,64 +200,31 @@ async def collect_product(
             product.status = "error"
             product.last_checked_at = now
             product.consecutive_failures = (product.consecutive_failures or 0) + 1
-            next_dt, delay = compute_next_check(
-                reason="error_backoff",
-                now=now,
-                stability_level=product.stability_level,
-                last_scheduled_delay_minutes=product.last_scheduled_delay_minutes,
-                consecutive_failures=product.consecutive_failures,
-                base_backoff_minutes=settings.collection_retry_base_delay_minutes,
-                max_backoff_minutes=settings.collection_retry_max_delay_minutes,
-                rate_limit_min=settings.rate_limit_reschedule_min_minutes,
-                rate_limit_max=settings.rate_limit_reschedule_max_minutes,
-                lock_busy_min=settings.lock_busy_reschedule_min_minutes,
-                lock_busy_max=settings.lock_busy_reschedule_max_minutes,
-            )
-            product.next_check_at = next_dt
-            product.last_scheduled_delay_minutes = delay
+            product.next_check_at = now + timedelta(minutes=product.check_interval_minutes)
+            product.last_scheduled_delay_minutes = product.check_interval_minutes
             product.next_check_reason = "error_backoff"
-            await session.commit()
+            try:
+                await session.commit()
+            except StaleDataError:
+                await session.rollback()
+                logger.warning("stale_data_no_commit_scraper_unavailable", produto_id=_pid_str)
+            record_collection_attempt(redis, _pid_str, "scraper_unavailable", dominio)
             raise
         except ScraperParseError as exc:
             error_code = exc.error_result.error_code
-            cls = classify_scraper_error(error_code)
             now = datetime.now(timezone.utc)
 
             logger.warning(
                 "scraper_erro_semantico",
                 produto_id=str(product.id),
                 error_code=error_code,
-                status_resultante=cls.status,
-                acao=cls.action,
-                domain_cooldown=cls.domain_cooldown,
                 marketplace=exc.error_result.marketplace,
             )
 
-            if cls.domain_cooldown:
-                # Abre circuit breaker escalável e agenda próxima coleta APÓS o cooldown.
-                # O orchestrator detecta domain_cooldown e não agenda Celery retry — o
-                # scheduler retomará quando next_check_at expirar.
-                cooldown_s = open_domain_circuit(redis, dominio)
-                product.status = "error"
-                product.last_checked_at = now
-                product.consecutive_failures = (product.consecutive_failures or 0) + 1
-                product.next_check_at = now + timedelta(seconds=cooldown_s + 60)
-                product.last_scheduled_delay_minutes = (cooldown_s + 60) // 60
-                product.next_check_reason = "domain_blocked"
-                await session.commit()
-                logger.warning(
-                    "domain_blocked_next_check_agendado",
-                    produto_id=str(product.id),
-                    dominio=dominio,
-                    cooldown_s=cooldown_s,
-                    next_check_at=str(product.next_check_at),
-                )
-                record_collection_attempt(redis, str(product.id), "captcha" if error_code == "CAPTCHA_DETECTED" else "blocked", dominio)
-                raise  # re-raise para o orchestrator detectar e NÃO agendar retry Celery
-
             product.last_checked_at = now
+            record_collection_attempt(redis, _pid_str, error_code.lower(), dominio)
 
-            if cls.status == "unavailable":
+            if error_code == "UNAVAILABLE":
                 if product.is_available:
                     product.last_availability_changed_at = now
                 product.status = "unavailable"
@@ -346,13 +241,6 @@ async def collect_product(
                     now=now,
                     stability_level=new_stability,
                     last_scheduled_delay_minutes=product.last_scheduled_delay_minutes,
-                    consecutive_failures=0,
-                    base_backoff_minutes=settings.collection_retry_base_delay_minutes,
-                    max_backoff_minutes=settings.collection_retry_max_delay_minutes,
-                    rate_limit_min=settings.rate_limit_reschedule_min_minutes,
-                    rate_limit_max=settings.rate_limit_reschedule_max_minutes,
-                    lock_busy_min=settings.lock_busy_reschedule_min_minutes,
-                    lock_busy_max=settings.lock_busy_reschedule_max_minutes,
                 )
                 product.check_interval_minutes = delay or product.check_interval_minutes
                 product.last_scheduled_delay_minutes = delay
@@ -366,37 +254,28 @@ async def collect_product(
                     stability_level=new_stability,
                     proximo_intervalo_min=delay,
                 )
-                return {"success": False, "reason": "unavailable", "retryable": False}
+                return {"success": False, "reason": "unavailable"}
 
-            if cls.status == "unsupported":
+            if error_code == "MARKETPLACE_NOT_SUPPORTED":
                 product.status = "unsupported"
                 product.next_check_at = None
                 product.next_check_reason = "unsupported"
                 await session.commit()
-                logger.info("produto_nao_suportado", produto_id=str(product.id), error_code=error_code)
-                return {"success": False, "reason": "unsupported", "retryable": False}
+                logger.info("produto_nao_suportado", produto_id=str(product.id))
+                return {"success": False, "reason": "unsupported"}
 
-            # status == "error" — backoff exponencial por consecutive_failures, re-raise para Celery retry
+            # Qualquer outro erro de parse: status=error, intervalo normal, sem retry
             product.status = "error"
             product.consecutive_failures = (product.consecutive_failures or 0) + 1
-            next_dt, delay = compute_next_check(
-                reason="error_backoff",
-                now=now,
-                stability_level=product.stability_level,
-                last_scheduled_delay_minutes=product.last_scheduled_delay_minutes,
-                consecutive_failures=product.consecutive_failures,
-                base_backoff_minutes=settings.collection_retry_base_delay_minutes,
-                max_backoff_minutes=settings.collection_retry_max_delay_minutes,
-                rate_limit_min=settings.rate_limit_reschedule_min_minutes,
-                rate_limit_max=settings.rate_limit_reschedule_max_minutes,
-                lock_busy_min=settings.lock_busy_reschedule_min_minutes,
-                lock_busy_max=settings.lock_busy_reschedule_max_minutes,
-            )
-            product.next_check_at = next_dt
-            product.last_scheduled_delay_minutes = delay
+            product.next_check_at = now + timedelta(minutes=product.check_interval_minutes)
+            product.last_scheduled_delay_minutes = product.check_interval_minutes
             product.next_check_reason = "error_backoff"
-            await session.commit()
-            raise
+            try:
+                await session.commit()
+            except StaleDataError:
+                await session.rollback()
+                logger.warning("stale_data_no_commit_parse_error", produto_id=_pid_str)
+            return {"success": False, "reason": "error", "error_code": error_code}
 
         # ── Sucesso do scraper ──────────────────────────────────────────────────
         now = datetime.now(timezone.utc)
@@ -428,8 +307,6 @@ async def collect_product(
             product.status = "active"
             product.last_checked_at = now
             product.consecutive_failures = 0
-            # Fecha circuit breaker se o domínio estava com falhas acumuladas
-            close_domain_circuit(redis, dominio)
             product.last_successful_collection_at = now
             record_collection_attempt(redis, str(product.id), "success", dominio)
 
@@ -461,13 +338,6 @@ async def collect_product(
                 now=now,
                 stability_level=new_stability,
                 last_scheduled_delay_minutes=product.last_scheduled_delay_minutes,
-                consecutive_failures=0,
-                base_backoff_minutes=settings.collection_retry_base_delay_minutes,
-                max_backoff_minutes=settings.collection_retry_max_delay_minutes,
-                rate_limit_min=settings.rate_limit_reschedule_min_minutes,
-                rate_limit_max=settings.rate_limit_reschedule_max_minutes,
-                lock_busy_min=settings.lock_busy_reschedule_min_minutes,
-                lock_busy_max=settings.lock_busy_reschedule_max_minutes,
             )
             product.check_interval_minutes = delay
             product.last_scheduled_delay_minutes = delay
@@ -477,9 +347,7 @@ async def collect_product(
             await session.commit()
             await session.refresh(historico)
 
-            # Canonicalização persistente: quando o scraper retorna uma canonical_url
-            # confiável diferente da URL armazenada, atualiza o registro para que
-            # próximas coletas já partam da URL canônica e robusta.
+            # Canonicalização persistente
             if resultado.canonical_url and resultado.confidence >= 0.90:
                 from sqlalchemy.exc import IntegrityError
                 from app.products.url_utils import normalize_url
@@ -519,7 +387,6 @@ async def collect_product(
 
         else:
             # Scraper retornou sucesso mas produto está indisponível
-            # Grava histórico com último preço conhecido para não perder a evidência de coleta
             preco_historico = novo_preco if novo_preco is not None else (
                 Decimal(str(product.current_price)) if product.current_price is not None else None
             )
@@ -552,13 +419,6 @@ async def collect_product(
                 now=now,
                 stability_level=new_stability,
                 last_scheduled_delay_minutes=product.last_scheduled_delay_minutes,
-                consecutive_failures=0,
-                base_backoff_minutes=settings.collection_retry_base_delay_minutes,
-                max_backoff_minutes=settings.collection_retry_max_delay_minutes,
-                rate_limit_min=settings.rate_limit_reschedule_min_minutes,
-                rate_limit_max=settings.rate_limit_reschedule_max_minutes,
-                lock_busy_min=settings.lock_busy_reschedule_min_minutes,
-                lock_busy_max=settings.lock_busy_reschedule_max_minutes,
             )
             product.check_interval_minutes = delay or product.check_interval_minutes
             product.last_scheduled_delay_minutes = delay
@@ -580,6 +440,6 @@ async def collect_product(
         release_lock(redis, chave_lock, lock_token)
         logger.debug(
             "lock_liberado",
-            produto_id=str(product.id),
+            produto_id=_pid_str,
             duracao_s=round(time.monotonic() - inicio, 2),
         )

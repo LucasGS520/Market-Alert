@@ -123,7 +123,7 @@ em `app/infra/scraper_errors.py`:
 | `TIMEOUT`                 | `error`           | `retry_with_backoff`  | Não              |
 | `PRICE_NOT_FOUND`         | `error`           | `retry_later`         | Não              |
 | `LAYOUT_CHANGED`          | `error`           | `retry_later`         | Não              |
-| `REDIRECT`                | `error`           | `retry_later`         | Não              |
+| `REDIRECT_TO_SEARCH`      | `error`           | `no_retry`            | Não              |
 | `UNAVAILABLE`             | `unavailable`     | `retry_later`         | Não              |
 | `MARKETPLACE_NOT_SUPPORTED` | `unsupported`   | `no_retry`            | Não              |
 

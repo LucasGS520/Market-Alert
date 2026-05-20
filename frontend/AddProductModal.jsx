@@ -31,7 +31,9 @@ function AddProductModal({ open, onClose, onAdded }) {
       });
       if (!r.ok) {
         const j = await r.json().catch(() => ({}));
-        throw new Error(j.detail || `Erro ${r.status}`);
+        const detail = j?.detail;
+        const msg = (detail && typeof detail === 'object' ? detail.message : detail) || `Erro ${r.status}`;
+        throw new Error(msg);
       }
       setUrl(''); setName('');
       onClose();

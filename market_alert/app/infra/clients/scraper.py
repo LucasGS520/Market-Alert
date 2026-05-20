@@ -1,6 +1,7 @@
 import json
 from datetime import datetime
 from decimal import Decimal
+from typing import Literal
 
 import httpx
 import structlog
@@ -12,7 +13,16 @@ logger = structlog.get_logger()
 
 
 class ScraperErrorResult(BaseModel):
-    error_code: str  # PRICE_NOT_FOUND | CAPTCHA_DETECTED | BLOCKED | UNAVAILABLE | REDIRECT | LAYOUT_CHANGED | TIMEOUT | MARKETPLACE_NOT_SUPPORTED
+    error_code: Literal[
+        "PRICE_NOT_FOUND",
+        "CAPTCHA_DETECTED",
+        "BLOCKED",
+        "UNAVAILABLE",
+        "REDIRECT_TO_SEARCH",
+        "LAYOUT_CHANGED",
+        "TIMEOUT",
+        "MARKETPLACE_NOT_SUPPORTED",
+    ]
     marketplace: str
     url: str
     retryable: bool

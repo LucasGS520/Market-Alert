@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     # janela maior pois eventos de mercado costumam ser mais voláteis.
     # A chave inclui competitor_id para que cada concorrente tenha cooldown independente.
     competitor_cooldown_minutes: int = 60
+    # Quorum mínimo de concorrentes válidos para disparar notificação.
+    # Comparação persiste para auditoria, mas notificação é bloqueada abaixo do quorum.
+    notification_min_quorum: int = 1
 
     # ── Regras de Comparação ───────────────────────────────────────────────
     status_threshold_competitive: float = 1.0   # % acima do mínimo → ainda "competitive"
@@ -55,11 +58,17 @@ class Settings(BaseSettings):
 
     # ── Política de Estabilidade ───────────────────────────────────────────
     price_stability_change_threshold_percent: float = 1.0
+    # Multiplicador sobre check_interval_minutes para definir dado como obsoleto.
+    # Ex.: intervalo=60min × 2.0 → stale após 120min sem coleta bem-sucedida.
+    stale_multiplier: float = 2.0
 
     # ── Scheduler com Lease ────────────────────────────────────────────────
     scheduler_batch_size: int = 50
     scheduler_lock_ttl_seconds: int = 55
     collection_lease_ttl_seconds: int = 600
+    # Limite de produtos enfileirados por domínio por ciclo do scheduler.
+    # Evita burst quando vários produtos do mesmo domínio ficam vencidos ao mesmo tempo.
+    scheduler_max_per_domain: int = 3
 
     # ── Reagendamento por Motivo ───────────────────────────────────────────
     rate_limit_reschedule_min_minutes: int = 5

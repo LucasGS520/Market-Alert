@@ -1,8 +1,10 @@
 import uuid
 from typing import Annotated
+from urllib.parse import urlparse
 
 import structlog
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infra.database import get_session
@@ -23,8 +25,13 @@ from app.products.monitored.monitored_service import (
     pause_product,
     resume_product,
 )
+from app.products.url_utils import get_url_rejection_reason, is_valid_product_url, normalize_url
 from app.api.v1.schemas import CreatedWithTask
 from app.scheduling.scheduler_service import enqueue_with_lease
+from app.workers.redis import (
+    get_collection_attempts,
+    get_redis,
+)
 
 logger = structlog.get_logger()
 
@@ -35,7 +42,18 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 
 @router.post("/", response_model=CreatedWithTask[MonitoredProductRead], status_code=status.HTTP_202_ACCEPTED)
 async def create_monitored(body: MonitoredProductCreate, session: Session) -> CreatedWithTask[MonitoredProductRead]:
-    produto = await create_product(session, str(body.url), body.name)
+    url_str = str(body.url)
+    normalized = normalize_url(url_str)
+    if not is_valid_product_url(normalized):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error": "invalid_url",
+                "message": get_url_rejection_reason(url_str),
+                "url": url_str,
+            },
+        )
+    produto = await create_product(session, normalized, body.name)
     task_id = await enqueue_with_lease(session, produto.id)
     return CreatedWithTask(data=MonitoredProductRead.model_validate(produto), task_id=task_id)
 
@@ -87,3 +105,40 @@ async def resume_monitored(product_id: uuid.UUID, session: Session) -> Monitored
 async def delete_monitored(product_id: uuid.UUID, session: Session) -> Response:
     await delete_product(session, product_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+class ProductHealth(BaseModel):
+    product_id: uuid.UUID
+    domain: str
+    status: str
+    next_check_at: str | None
+    next_check_reason: str | None
+    consecutive_failures: int
+    last_successful_collection_at: str | None
+    recent_attempts: list[dict]
+
+
+@router.get("/{product_id}/health", response_model=ProductHealth)
+async def get_product_health(product_id: uuid.UUID, session: Session) -> ProductHealth:
+    """Diagnóstico de coleta: status atual, agendamento e histórico de tentativas."""
+    produto = await session.get(MonitoredProduct, product_id)
+    if not produto:
+        raise HTTPException(status_code=404, detail="Produto não encontrado")
+
+    redis = get_redis()
+    dominio = urlparse(produto.url_normalized or "").netloc or "unknown"
+
+    return ProductHealth(
+        product_id=product_id,
+        domain=dominio,
+        status=produto.status,
+        next_check_at=produto.next_check_at.isoformat() if produto.next_check_at else None,
+        next_check_reason=produto.next_check_reason,
+        consecutive_failures=produto.consecutive_failures or 0,
+        last_successful_collection_at=(
+            produto.last_successful_collection_at.isoformat()
+            if produto.last_successful_collection_at
+            else None
+        ),
+        recent_attempts=get_collection_attempts(redis, str(product_id)),
+    )

@@ -1,8 +1,7 @@
 import time
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from decimal import Decimal
-from urllib.parse import urlparse
 
 import structlog
 from fastapi import HTTPException
@@ -11,17 +10,11 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infra.clients.scraper import ScraperClient, ScraperParseError, ScraperUnavailableError
-from app.infra.scraper_errors import classify_scraper_error
 from app.products.competitor.competitor_model import Competitor
 from app.products.monitored.monitored_model import MonitoredProduct
 from app.products.price_history.price_model import PriceHistory
 from app.workers.redis import (
     acquire_lock,
-    check_rate_limit,
-    close_domain_circuit,
-    get_remaining_circuit_cooldown,
-    is_domain_open,
-    open_domain_circuit,
     release_lock,
 )
 
@@ -113,27 +106,13 @@ async def collect_competitor(
     Returns:
         dict com chave "success" (bool) e campos adicionais por resultado.
     Raises:
-        ScraperUnavailableError: scraper inacessível — Celery deve retentar.
-        ScraperParseError: erro retryable do scraper — Celery deve retentar.
+        ScraperUnavailableError: scraper inacessível — erro registrado, collector_task encerra sem retry.
     """
     inicio = time.monotonic()
 
     if competitor.status in ("paused", "unsupported"):
         logger.info("coleta_ignorada_status", concorrente_id=str(competitor.id), status=competitor.status)
         return {"success": False, "reason": "ineligible_status"}
-
-    dominio = urlparse(competitor.url_original).netloc
-
-    # Verifica circuit breaker antes do lock — mesmo domínio pode estar bloqueado
-    if is_domain_open(redis, dominio):
-        remaining_ttl = get_remaining_circuit_cooldown(redis, dominio)
-        logger.info(
-            "coleta_concorrente_dominio_circuit_open",
-            dominio=dominio,
-            concorrente_id=str(competitor.id),
-            remaining_ttl=remaining_ttl,
-        )
-        return {"success": False, "reason": "domain_circuit_open"}
 
     chave_lock = f"lock:collect:{competitor.id}"
     lock_token = acquire_lock(redis, chave_lock, timeout=300)
@@ -144,26 +123,11 @@ async def collect_competitor(
     logger.info("lock_adquirido_concorrente", concorrente_id=str(competitor.id))
 
     try:
-        if not check_rate_limit(redis, dominio):
-            from app.infra.config import settings
-
-            logger.info(
-                "coleta_rate_limited",
-                dominio=dominio,
-                concorrente_id=str(competitor.id),
-                ttl_s=settings.domain_rate_limit_ttl_seconds,
-            )
-            return {"success": False, "reason": "rate_limited"}
-
-        logger.info(
-            "iniciando_coleta_concorrente",
-            concorrente_id=str(competitor.id),
-            url=competitor.url_original,
-        )
+        logger.info("iniciando_coleta_concorrente", concorrente_id=str(competitor.id), url=competitor.url_normalized)
 
         previous_is_available = competitor.is_available
         try:
-            resultado = await scraper.parse(competitor.url_original)
+            resultado = await scraper.parse(competitor.url_normalized)
         except ScraperUnavailableError as exc:
             from app.infra.config import settings
 
@@ -180,43 +144,39 @@ async def collect_competitor(
             raise
         except ScraperParseError as exc:
             error_code = exc.error_result.error_code
-            cls = classify_scraper_error(error_code)
             now = datetime.now(timezone.utc)
 
             logger.warning(
                 "scraper_erro_semantico_concorrente",
                 concorrente_id=str(competitor.id),
                 error_code=error_code,
-                status_resultante=cls.status,
-                acao=cls.action,
-                domain_cooldown=cls.domain_cooldown,
+                retryable=exc.error_result.retryable,
             )
-
-            if cls.domain_cooldown:
-                open_domain_circuit(redis, dominio)
-                competitor.status = "error"
-                competitor.last_checked_at = now
-                await session.commit()
-                raise  # re-raise para collector_task detectar e marcar failed na rodada
 
             competitor.last_checked_at = now
 
-            if cls.status == "unavailable":
+            if error_code == "UNAVAILABLE":
                 availability_changed = previous_is_available is not False
                 competitor.status = "unavailable"
                 competitor.is_available = False
                 await session.commit()
-                return {"success": False, "reason": "unavailable", "retryable": False, "availability_changed": availability_changed}
+                return {"success": False, "reason": "unavailable", "availability_changed": availability_changed}
 
-            if cls.status == "unsupported":
+            if error_code == "MARKETPLACE_NOT_SUPPORTED":
                 competitor.status = "unsupported"
                 await session.commit()
-                return {"success": False, "reason": "unsupported", "retryable": False}
+                return {"success": False, "reason": "unsupported"}
 
-            # status == "error" — re-raise para Celery retry
+            if error_code in ("BLOCKED", "CAPTCHA_DETECTED"):
+                competitor.status = "error"
+                await session.commit()
+                logger.warning("coleta_bloqueada_concorrente", concorrente_id=str(competitor.id), error_code=error_code)
+                return {"success": False, "reason": "blocked", "error_code": error_code}
+
+            # Qualquer outro erro de parse: status=error, sem retry
             competitor.status = "error"
             await session.commit()
-            raise
+            return {"success": False, "reason": "error", "error_code": error_code}
 
         # ── Sucesso do scraper ──────────────────────────────────────────────────
         now = datetime.now(timezone.utc)
@@ -242,7 +202,6 @@ async def collect_competitor(
             competitor.current_price = float(novo_preco)
             competitor.is_available = True
             competitor.last_checked_at = now
-            close_domain_circuit(redis, dominio)
 
             if resultado.title and not competitor.name:
                 competitor.name = resultado.title

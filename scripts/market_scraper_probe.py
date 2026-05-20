@@ -42,9 +42,8 @@ ScrapeResult = _schemas_module.ScrapeResult
 BrowserSession = _browser_module.BrowserSession
 
 DEFAULT_URLS = [
-    "https://www.mercadolivre.com.br/kit-lanterna-traseira-led-hilux-16-17-18-19-20-21-22-23-24/up/MLBU3329266942",
-    "https://www.mercadolivre.com.br/par-farol-palio-2008-2009-2010-siena-08-2009-2010-2011--reto/up/MLBU729640320",
-    "https://www.mercadolivre.com.br/par-farol-uno-mille-fire-economy-way-04-2005-2006-2007-2008/up/MLBU729679580",
+    "https://produto.mercadolivre.com.br/MLB-2674274038-farol-fiat-uno-2004-2005-2006-2007-2008-09-mascara-negra-_JM#reco_item_pos=1&reco_backend=item_decorator&reco_backend_type=function&reco_client=home_items-decorator-legacy&reco_id=5231b856-51ad-42bb-b4a9-8da764f3dbfe&reco_model=&c_id=/home/navigation-trends-recommendations/element&c_uid=fffcbc84-0de9-48d4-a694-e60edc34f550&da_id=navigation_trend&da_position=2&id_origin=/home/dynamic_access&da_sort_algorithm=ranker",
+    "https://produto.mercadolivre.com.br/MLB-4103190781-refletor-lanterna-parachoque-traseiro-hb20-2023-2024-2025-_JM?searchVariation=184000131856&pdp_filters=seller_id%3A193163363#polycard_client=search-desktop&be_origin=backend&searchVariation=184000131856&search_layout=grid&position=11&type=item&tracking_id=316ca3e2-7e56-4580-889d-47946efeb50e",
 ]
 
 DEFAULT_API_URL = "http://127.0.0.1:8001/scraper/parse"
@@ -148,20 +147,15 @@ class DiagnosisReport:
                     "Alternativa: extrair via JSON-LD (schema.org) se disponível",
                 ]
 
-        # Detectar REDIRECT
-        elif extraction.error_code.value == "REDIRECT":
-            cause = "REDIRECIONAMENTO_NAO_PRODUTO"
-            if collected.final_url != collected.url:
-                recommendations = [
-                    f"URL original: {collected.url}",
-                    f"URL final: {collected.final_url}",
-                    "Página foi redirecionada para página de busca, home ou erro",
-                    "Possível que URL está quebrada, produto foi removido ou URL é de recomendação",
-                ]
-            else:
-                recommendations = [
-                    "Página parece ser de busca/recomendação, não de produto único",
-                ]
+        # Detectar redirecionamento para busca/categoria
+        elif extraction.error_code.value == "REDIRECT_TO_SEARCH":
+            cause = "REDIRECIONAMENTO_PARA_BUSCA"
+            recommendations = [
+                f"URL original: {collected.url}",
+                f"URL final: {collected.final_url}",
+                "URL redirecionou para página de busca ou categoria, não de produto",
+                "Verifique se a URL é de um produto individual",
+            ]
 
         return {
             "status": "failed",
@@ -246,12 +240,12 @@ def _normalize_result(result: ScrapeResult | ScrapeError) -> dict[str, Any]:
 def _error_diagnostic(error: ScrapeError) -> str:
     if error.error_code.value in {"CAPTCHA_DETECTED", "BLOCKED"}:
         return "anti-bot"
-    if error.error_code.value == "REDIRECT":
-        return "redirect-to-non-product-page"
+    if error.error_code.value == "REDIRECT_TO_SEARCH":
+        return "redirect-to-search-or-category"
     if error.error_code.value == "PRICE_NOT_FOUND":
         return "layout-or-extraction-failure"
     if error.error_code.value == "UNAVAILABLE":
-        return "out-of-stock"
+        return "product-not-found-or-unavailable"
     return "unknown"
 
 

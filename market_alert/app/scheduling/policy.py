@@ -8,9 +8,6 @@ CheckReason = Literal[
     "success_price_changed",
     "success_price_unchanged",
     "unavailable",
-    "error_backoff",
-    "rate_limited",
-    "lock_busy",
     "unsupported",
     "initial",
 ]
@@ -81,40 +78,19 @@ def pick_delay_in_window(min_minutes: int, max_minutes: int, last_delay: int | N
     return delay
 
 
-def backoff_delay(consecutive_failures: int, base_minutes: int, max_minutes: int) -> int:
-    """Backoff exponencial com teto: base * 2^(failures-1), limitado por max."""
-    exponent = max(consecutive_failures - 1, 0)
-    return min(base_minutes * (2 ** exponent), max_minutes)
-
-
 def compute_next_check(
     reason: CheckReason,
     now: datetime,
     stability_level: str,
     last_scheduled_delay_minutes: int | None,
-    consecutive_failures: int,
-    base_backoff_minutes: int,
-    max_backoff_minutes: int,
-    rate_limit_min: int,
-    rate_limit_max: int,
-    lock_busy_min: int,
-    lock_busy_max: int,
 ) -> tuple[datetime | None, int | None]:
-    """Calcula (next_check_at, delay_minutes) para cada motivo de coleta.
+    """Calcula (next_check_at, delay_minutes) com base no nível de estabilidade.
 
     Retorna (None, None) exclusivamente para 'unsupported'.
     """
     if reason == "unsupported":
         return None, None
 
-    if reason == "rate_limited":
-        delay = pick_delay_in_window(rate_limit_min, rate_limit_max, last_scheduled_delay_minutes)
-    elif reason == "lock_busy":
-        delay = pick_delay_in_window(lock_busy_min, lock_busy_max, last_scheduled_delay_minutes)
-    elif reason == "error_backoff":
-        delay = backoff_delay(consecutive_failures, base_backoff_minutes, max_backoff_minutes)
-    else:
-        win_min, win_max = window_for_stability(stability_level)
-        delay = pick_delay_in_window(win_min, win_max, last_scheduled_delay_minutes)
-
+    win_min, win_max = window_for_stability(stability_level)
+    delay = pick_delay_in_window(win_min, win_max, last_scheduled_delay_minutes)
     return now + timedelta(minutes=delay), delay

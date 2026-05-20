@@ -11,27 +11,10 @@ class ErrorCode(str, Enum):
     CAPTCHA_DETECTED = "CAPTCHA_DETECTED"
     BLOCKED = "BLOCKED"
     UNAVAILABLE = "UNAVAILABLE"
-    REDIRECT = "REDIRECT"
     REDIRECT_TO_SEARCH = "REDIRECT_TO_SEARCH"
     LAYOUT_CHANGED = "LAYOUT_CHANGED"
     TIMEOUT = "TIMEOUT"
     MARKETPLACE_NOT_SUPPORTED = "MARKETPLACE_NOT_SUPPORTED"
-
-
-# Matriz error_code → retryable: define se o worker deve re-enfileirar após esse erro.
-# True  = erro transitório; nova tentativa pode resolver.
-# False = erro semântico/estrutural; retentativa imediata não ajuda.
-RETRYABLE_BY_ERROR_CODE: dict[ErrorCode, bool] = {
-    ErrorCode.CAPTCHA_DETECTED: True,
-    ErrorCode.BLOCKED: True,
-    ErrorCode.TIMEOUT: True,
-    ErrorCode.REDIRECT: True,
-    ErrorCode.REDIRECT_TO_SEARCH: False,
-    ErrorCode.PRICE_NOT_FOUND: False,
-    ErrorCode.LAYOUT_CHANGED: False,
-    ErrorCode.UNAVAILABLE: False,
-    ErrorCode.MARKETPLACE_NOT_SUPPORTED: False,
-}
 
 
 class ExtractionMethod(str, Enum):

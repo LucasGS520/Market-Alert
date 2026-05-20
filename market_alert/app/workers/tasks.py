@@ -6,7 +6,8 @@ Tarefas Celery — processamento assíncrono em background.
     Aceita exatamente um dos dois IDs.
     Orquestração de rodada (concorrentes + comparação) é responsabilidade
     de collection_orchestrator_task (app.workers.orchestrator).
-    Retenta até 3 vezes em caso de falha retryable do scraper.
+    Sem retry automático — erros de scraper são registrados pelo service e
+    o scheduler re-enfileira via next_check_at.
 
 ━━━ comparison_task ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Recalcula ranking, médias e status competitivo de um produto.
@@ -34,7 +35,7 @@ from celery import Task
 from sqlalchemy import select
 
 from app.infra.database import AsyncSessionLocal
-from app.infra.clients.scraper import ScraperClient, ScraperParseError, ScraperUnavailableError
+from app.infra.clients.scraper import ScraperClient, ScraperUnavailableError
 from app.comparison.comparison_service import calculate_comparison
 from app.products.competitor.competitor_model import Competitor
 from app.products.competitor.competitor_service import collect_competitor
@@ -86,8 +87,6 @@ def _decide_alert(sinais: list[str]) -> _AlertDecision | None:
 
 @celery_app.task(
     bind=True,
-    max_retries=3,
-    default_retry_delay=60,
     name="app.workers.tasks.collector_task",
 )
 def collector_task(
@@ -149,16 +148,7 @@ def collector_task(
 
                 try:
                     resultado = await collect_product(session, redis, scraper, produto)
-                except ScraperUnavailableError as exc:
-                    raise self.retry(exc=exc)
-                except ScraperParseError as exc:
-                    if exc.error_result.retryable:
-                        raise self.retry(exc=exc)
-                    logger.warning(
-                        "coleta_permanentemente_falhada",
-                        produto_id=product_id,
-                        error_code=exc.error_result.error_code,
-                    )
+                except ScraperUnavailableError:
                     return
 
                 logger.info(
@@ -213,23 +203,9 @@ def collector_task(
 
                 try:
                     resultado = await collect_competitor(session, redis, scraper, concorrente)
-                except ScraperUnavailableError as exc:
-                    # Só marca failed na última tentativa; retries intermediários ficam "pending"
-                    if run_id and self.request.retries >= self.max_retries:
+                except ScraperUnavailableError:
+                    if run_id:
                         mark_failed(redis, run_id, competitor_id)
-                    raise self.retry(exc=exc)
-                except ScraperParseError as exc:
-                    is_retryable = exc.error_result.retryable
-                    is_last_attempt = self.request.retries >= self.max_retries
-                    if run_id and (not is_retryable or is_last_attempt):
-                        mark_failed(redis, run_id, competitor_id)
-                    if is_retryable:
-                        raise self.retry(exc=exc)
-                    logger.warning(
-                        "coleta_permanentemente_falhada",
-                        concorrente_id=competitor_id,
-                        error_code=exc.error_result.error_code,
-                    )
                     return
 
                 coleta_ok = resultado.get("success", False)
@@ -238,7 +214,7 @@ def collector_task(
                 if run_id:
                     if coleta_ok:
                         mark_done(redis, run_id, competitor_id)
-                    elif razao in ("rate_limited", "lock_busy"):
+                    elif razao == "lock_busy":
                         mark_deferred(redis, run_id, competitor_id)
                     elif razao in ("ineligible_status", "unsupported"):
                         mark_skipped(redis, run_id, competitor_id)
@@ -332,6 +308,27 @@ def comparison_task(
                         logger.info(
                             "comparacao_manual_sem_notificacao",
                             produto_id=str(mid),
+                            run_id=run_id,
+                        )
+                        return
+
+                    # Rodadas degradadas: comparação persiste para auditoria, notificação bloqueada
+                    _DEGRADED_STATUSES = {"partial", "no_competitors", "expired"}
+                    if comparacao.run_status in _DEGRADED_STATUSES:
+                        logger.info(
+                            "notificacao_bloqueada_run_status_degradado",
+                            produto_id=str(mid),
+                            run_status=comparacao.run_status,
+                            run_id=run_id,
+                        )
+                        return
+
+                    if comparacao.valid_competitors_count < _settings.notification_min_quorum:
+                        logger.info(
+                            "notificacao_bloqueada_quorum_insuficiente",
+                            produto_id=str(mid),
+                            valid_competitors=comparacao.valid_competitors_count,
+                            min_quorum=_settings.notification_min_quorum,
                             run_id=run_id,
                         )
                         return

@@ -18,7 +18,6 @@ class ScraperErrorResult(BaseModel):
         "CAPTCHA_DETECTED",
         "BLOCKED",
         "UNAVAILABLE",
-        "REDIRECT",
         "REDIRECT_TO_SEARCH",
         "LAYOUT_CHANGED",
         "TIMEOUT",

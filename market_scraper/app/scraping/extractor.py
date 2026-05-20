@@ -47,6 +47,16 @@ _CAPTCHA_TITLES = (
     "verificacao de seguranca",
 )
 
+# Padrões exclusivos de páginas de produto renderizadas — presença garante que não é CAPTCHA.
+# Strings do design system ML que nunca aparecem em telas de bloqueio.
+_PRODUCT_CONTENT_INDICATORS = (
+    "ui-pdp-title",
+    "poly-component__price",
+    "andes-money-amount",
+    '"@type":"product"',
+    '"@type": "product"',
+)
+
 
 def parse_price_string(text: str) -> Decimal | None:
     """Normaliza uma string de preço para Decimal, suportando formatos BR e EN."""
@@ -108,6 +118,11 @@ def detect_captcha(html: str) -> bool:
     if not html:
         return False
     html_lower = html.lower()
+    # Short-circuit: conteúdo inequívoco de produto descarta qualquer indicador de CAPTCHA.
+    # Scripts de monitoramento (Cloudflare BM, PerimeterX) aparecem em páginas normais do ML;
+    # elementos do design system ML nunca aparecem em telas de bloqueio reais.
+    if any(ind in html_lower for ind in _PRODUCT_CONTENT_INDICATORS):
+        return False
     if any(ind in html_lower for ind in _CAPTCHA_INDICATORS):
         return True
     # Verifica <title> — sistemas como Cloudflare retornam 200 com título de challenge

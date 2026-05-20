@@ -1,7 +1,5 @@
 import re
 from decimal import Decimal, InvalidOperation
-from urllib.parse import urlparse, urlunparse
-
 import structlog
 from parsel import Selector
 from playwright.async_api import Page
@@ -28,20 +26,7 @@ _REDIRECT_PATTERNS = re.compile(
     r"(/identity/|/login|/security|/verification|/checkout/|/seller-registration|/gz/)"
 )
 _SEARCH_URL_PATTERNS = re.compile(r"(/search\?|/listado/|/c/|/categoria/)")
-_ML_JM_RE = re.compile(r"_JM$", re.IGNORECASE)
-_ML_ITEM_ID_RE = re.compile(r"MLB-?(\d+)", re.IGNORECASE)
 
-
-def _normalize_ml_url(url: str) -> str:
-    """Redireciona produto.mercadolivre.com.br para www e canonicaliza URLs publicitárias _JM."""
-    parsed = urlparse(url)
-    if parsed.netloc == "produto.mercadolivre.com.br":
-        parsed = parsed._replace(netloc="www.mercadolivre.com.br")
-    if _ML_JM_RE.search(parsed.path):
-        m = _ML_ITEM_ID_RE.search(parsed.path)
-        if m:
-            return f"https://{parsed.netloc}/p/MLB{m.group(1)}"
-    return urlunparse(parsed)
 
 # Chaves de preço a buscar no JSON de hidratação
 _PRICE_KEYS = frozenset({"price", "sale_price", "amount", "value", "currentprice"})
@@ -53,8 +38,6 @@ class MercadoLivreAdapter(MarketplaceAdapter):
     marketplace = "mercadolivre"
 
     async def collect(self, url: str) -> CollectedPage:
-        url = _normalize_ml_url(url)
-
         async def _wait(page: Page) -> None:
             try:
                 # Cobre layout normal (/MLB-, /p/) e produto universal (/up/ com .poly-*)
@@ -99,7 +82,7 @@ class MercadoLivreAdapter(MarketplaceAdapter):
 
         if page.status_code == 404:
             return ScrapeError(
-                error_code=ErrorCode.REDIRECT,
+                error_code=ErrorCode.UNAVAILABLE,
                 marketplace=self.marketplace,
                 url=page.url,
                 retryable=False,
@@ -201,8 +184,7 @@ class MercadoLivreAdapter(MarketplaceAdapter):
 
         canonical = _extract_canonical(sel)
 
-        original_url_normalized = _normalize_ml_url(page.url)
-        if canonical and canonical.rstrip("/") != original_url_normalized.rstrip("/"):
+        if canonical and canonical.rstrip("/") != page.url.rstrip("/"):
             logger.info(
                 "ml_url_redirecionada",
                 url_original=page.url,

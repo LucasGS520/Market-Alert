@@ -25,6 +25,7 @@ from app.products.monitored.monitored_service import (
     pause_product,
     resume_product,
 )
+from app.products.url_utils import get_url_rejection_reason, is_valid_product_url, normalize_url, resolve_canonical_url
 from app.api.v1.schemas import CreatedWithTask
 from app.scheduling.scheduler_service import enqueue_with_lease
 from app.workers.redis import (
@@ -41,7 +42,23 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 
 @router.post("/", response_model=CreatedWithTask[MonitoredProductRead], status_code=status.HTTP_202_ACCEPTED)
 async def create_monitored(body: MonitoredProductCreate, session: Session) -> CreatedWithTask[MonitoredProductRead]:
-    produto = await create_product(session, str(body.url), body.name)
+    url_str = str(body.url)
+    normalized = normalize_url(url_str)
+    if not is_valid_product_url(normalized):
+        resolved = await resolve_canonical_url(url_str)
+        if resolved and is_valid_product_url(resolved):
+            logger.info("url_resolvida_por_redirect", url_original=url_str, url_resolvida=resolved)
+            url_str = resolved
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "error": "invalid_url",
+                    "message": get_url_rejection_reason(url_str),
+                    "url": url_str,
+                },
+            )
+    produto = await create_product(session, url_str, body.name)
     task_id = await enqueue_with_lease(session, produto.id)
     return CreatedWithTask(data=MonitoredProductRead.model_validate(produto), task_id=task_id)
 

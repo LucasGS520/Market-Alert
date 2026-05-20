@@ -106,7 +106,7 @@ async def collect_competitor(
     Returns:
         dict com chave "success" (bool) e campos adicionais por resultado.
     Raises:
-        ScraperUnavailableError: scraper inacessível — Celery deve retentar (max 1x).
+        ScraperUnavailableError: scraper inacessível — erro registrado, collector_task encerra sem retry.
     """
     inicio = time.monotonic()
 

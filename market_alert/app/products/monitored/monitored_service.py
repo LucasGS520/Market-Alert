@@ -163,7 +163,7 @@ async def collect_product(
     Returns:
         dict com chave "success" (bool) e campos adicionais por resultado.
     Raises:
-        ScraperUnavailableError: scraper inacessível — Celery deve retentar (max 1x).
+        ScraperUnavailableError: scraper inacessível — erro registrado, lease liberado pelo orquestrador.
     """
     from app.infra.config import settings
 
@@ -359,8 +359,13 @@ async def collect_product(
             product.next_check_at = next_dt
             product.next_check_reason = razao
 
-            await session.commit()
-            await session.refresh(historico)
+            try:
+                await session.commit()
+                await session.refresh(historico)
+            except StaleDataError:
+                await session.rollback()
+                logger.warning("produto_deletado_durante_coleta", produto_id=_pid_str)
+                return {"success": False, "reason": "product_deleted"}
 
             # Canonicalização persistente
             if resultado.canonical_url and resultado.confidence >= 0.90:

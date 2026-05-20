@@ -42,11 +42,11 @@ ScrapeResult = _schemas_module.ScrapeResult
 BrowserSession = _browser_module.BrowserSession
 
 DEFAULT_URLS = [
-    "https://www.mercadolivre.com.br/kit-lanterna-traseira-led-hilux-16-17-18-19-20-21-22-23-24/up/MLBU3329266942",
-    "https://www.mercadolivre.com.br/par-farol-palio-2008-2009-2010-siena-08-2009-2010-2011--reto/up/MLBU729640320",
-    "https://www.mercadolivre.com.br/par-farol-uno-mille-fire-economy-way-04-2005-2006-2007-2008/up/MLBU729679580",
-    "https://produto.mercadolivre.com.br/MLB-2674274038-farol-fiat-uno-2004-2005-2006-2007-2008-09-mascara-negra-_JM?searchVariation=174625113652&pdp_filters=seller_id%3A193163363#polycard_client%3Drecommendations_recoview-selleritems-eshops%26reco_backend%3Dsame-seller-odin%26reco_client%3Drecoview-selleritems-eshops%26reco_item_pos%3D4%26reco_backend_type%3Dlow_level%26reco_id%3D74eed334-741b-46b0-8711-47c5995da073%26tracking_id%3D89ecd568305f49bafdb849c0e47dbe83%26source%3Deshops%26seller_id%3D193163363%26category_id%3DMLB7863",
-    "https://produto.mercadolivre.com.br/MLB-1073487544-farol-chevrolet-astra-2003-2004-2005-2006-2007-2008-2009-201-_JM?searchVariation=25935282882&pdp_filters=seller_id%3A193163363#polycard_client%3Drecommendations_recoview-selleritems-eshops%26reco_backend%3Dsame-seller-odin%26reco_client%3Drecoview-selleritems-eshops%26reco_item_pos%3D4%26reco_backend_type%3Dlow_level%26reco_id%3D9357938c-84c1-4081-8d9b-5e87d278065b%26tracking_id%3D5d70776bd5421d99e30f1297df1f6ef5%26source%3Deshops%26seller_id%3D193163363%26category_id%3DMLB7863",
+    "https://www.mercadolivre.com.br/kit-lanterna-traseira-led-hilux-srv-srx-com-led-2016-a-2021/up/MLBU3329265058#polycard_client=recommendations_home_navigation-recommendations&reco_backend=machinalis-homes-univb-equivalent-offer&reco_client=home_navigation-recommendations&reco_item_pos=2&reco_backend_type=function&reco_id=ba4cbb4f-2e7c-4ece-8b35-14cd64dcf5f1&wid=MLB3406201837&sid=recos&c_id=/home/navigation-recommendations/element&c_uid=229b8d22-78fe-4594-acc5-97466ecb3430",
+    "https://produto.mercadolivre.com.br/MLB-2674274038-farol-fiat-uno-2004-2005-2006-2007-2008-09-mascara-negra-_JM#reco_item_pos=1&reco_backend=item_decorator&reco_backend_type=function&reco_client=home_items-decorator-legacy&reco_id=5231b856-51ad-42bb-b4a9-8da764f3dbfe&reco_model=&c_id=/home/navigation-trends-recommendations/element&c_uid=fffcbc84-0de9-48d4-a694-e60edc34f550&da_id=navigation_trend&da_position=2&id_origin=/home/dynamic_access&da_sort_algorithm=ranker",
+    "https://www.mercadolivre.com.br/break-light-hilux-2016-2017-2018-2019-2020-luz-tampa-traseir/up/MLBU732132798",
+    "https://produto.mercadolivre.com.br/MLB-4103190781-refletor-lanterna-parachoque-traseiro-hb20-2023-2024-2025-_JM?searchVariation=184000131856&pdp_filters=seller_id%3A193163363#polycard_client=search-desktop&be_origin=backend&searchVariation=184000131856&search_layout=grid&position=11&type=item&tracking_id=316ca3e2-7e56-4580-889d-47946efeb50e",
+    "https://www.mercadolivre.com.br/par-farol-gol-g4-power-2006-2007-2008-2009-mascara-negra/up/MLBU753798541",
 ]
 
 DEFAULT_API_URL = "http://127.0.0.1:8001/scraper/parse"

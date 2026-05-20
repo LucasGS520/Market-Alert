@@ -6,7 +6,8 @@ Tarefas Celery — processamento assíncrono em background.
     Aceita exatamente um dos dois IDs.
     Orquestração de rodada (concorrentes + comparação) é responsabilidade
     de collection_orchestrator_task (app.workers.orchestrator).
-    Retenta até 3 vezes em caso de falha retryable do scraper.
+    Sem retry automático — erros de scraper são registrados pelo service e
+    o scheduler re-enfileira via next_check_at.
 
 ━━━ comparison_task ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     Recalcula ranking, médias e status competitivo de um produto.
@@ -86,8 +87,6 @@ def _decide_alert(sinais: list[str]) -> _AlertDecision | None:
 
 @celery_app.task(
     bind=True,
-    max_retries=1,
-    default_retry_delay=60,
     name="app.workers.tasks.collector_task",
 )
 def collector_task(
@@ -149,8 +148,8 @@ def collector_task(
 
                 try:
                     resultado = await collect_product(session, redis, scraper, produto)
-                except ScraperUnavailableError as exc:
-                    raise self.retry(exc=exc)
+                except ScraperUnavailableError:
+                    return
 
                 logger.info(
                     "collector_task_concluido",
@@ -204,10 +203,10 @@ def collector_task(
 
                 try:
                     resultado = await collect_competitor(session, redis, scraper, concorrente)
-                except ScraperUnavailableError as exc:
-                    if run_id and self.request.retries >= self.max_retries:
+                except ScraperUnavailableError:
+                    if run_id:
                         mark_failed(redis, run_id, competitor_id)
-                    raise self.retry(exc=exc)
+                    return
 
                 coleta_ok = resultado.get("success", False)
                 razao = resultado.get("reason")

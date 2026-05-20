@@ -41,8 +41,6 @@ def _liberar_lease(produto: MonitoredProduct) -> None:
 
 @celery_app.task(
     bind=True,
-    max_retries=1,
-    default_retry_delay=60,
     name="app.workers.orchestrator.collection_orchestrator_task",
 )
 def collection_orchestrator_task(self: Task, product_id: str) -> None:
@@ -93,18 +91,27 @@ def collection_orchestrator_task(self: Task, product_id: str) -> None:
 
             try:
                 resultado = await collect_product(session, redis, scraper, produto)
-            except ScraperUnavailableError as exc:
-                raise self.retry(exc=exc)
+            except ScraperUnavailableError:
+                # service already recorded the error; release lease so scheduler can re-enqueue
+                _liberar_lease(produto)
+                await session.commit()
+                logger.warning(
+                    "orquestrador_scraper_indisponivel_lease_liberado",
+                    produto_id=product_id,
+                )
+                return
 
             coleta_ok = resultado.get("success", False)
 
             if not coleta_ok:
-                _liberar_lease(produto)
-                await session.commit()
+                reason = resultado.get("reason")
+                if reason != "product_deleted":
+                    _liberar_lease(produto)
+                    await session.commit()
                 logger.info(
                     "orquestrador_coleta_incompleta",
                     produto_id=product_id,
-                    razao=resultado.get("reason"),
+                    razao=reason,
                     duracao_s=round(time.monotonic() - inicio, 2),
                 )
                 return

@@ -2,13 +2,14 @@ import uuid
 from typing import Annotated
 
 import structlog
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.schemas import CreatedWithTask
 from app.infra.database import get_session
 from app.products.competitor.competitor_schemas import CompetitorCreate, CompetitorRead
 from app.products.competitor.competitor_service import create_competitor, delete_competitor, list_competitors
+from app.products.url_utils import get_url_rejection_reason, is_valid_product_url, normalize_url, resolve_canonical_url
 
 logger = structlog.get_logger()
 
@@ -32,7 +33,23 @@ async def add_competitor(
     monitored_id: uuid.UUID, body: CompetitorCreate, session: Session
 ) -> CreatedWithTask[CompetitorRead]:
     """Adicionar um concorrente a um produto monitorado."""
-    concorrente = await create_competitor(session, monitored_id, str(body.url), body.name)
+    url_str = str(body.url)
+    normalized = normalize_url(url_str)
+    if not is_valid_product_url(normalized):
+        resolved = await resolve_canonical_url(url_str)
+        if resolved and is_valid_product_url(resolved):
+            logger.info("url_resolvida_por_redirect", url_original=url_str, url_resolvida=resolved)
+            url_str = resolved
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "error": "invalid_url",
+                    "message": get_url_rejection_reason(url_str),
+                    "url": url_str,
+                },
+            )
+    concorrente = await create_competitor(session, monitored_id, url_str, body.name)
 
     task_id: str | None = None
     try:

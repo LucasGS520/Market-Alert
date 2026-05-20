@@ -1,0 +1,167 @@
+{
+  "timestamp": "2026-05-20T12:20:51.059258",
+  "total_results": 5,
+  "results": [
+    {
+      "url": "https://www.mercadolivre.com.br/kit-lanterna-traseira-led-hilux-srv-srx-com-led-2016-a-2021/up/MLBU3329265058#polycard_client=recommendations_home_navigation-recommendations&reco_backend=machinalis-homes-univb-equivalent-offer&reco_client=home_navigation-recommendations&reco_item_pos=2&reco_backend_type=function&reco_id=ba4cbb4f-2e7c-4ece-8b35-14cd64dcf5f1&wid=MLB3406201837&sid=recos&c_id=/home/navigation-recommendations/element&c_uid=229b8d22-78fe-4594-acc5-97466ecb3430",
+      "marketplace": "mercadolivre",
+      "timestamp": "2026-05-20T12:21:24.823216",
+      "elapsed_seconds": 33.763914585113525,
+      "success": true,
+      "error_code": null,
+      "collection": {
+        "final_url": "https://www.mercadolivre.com.br/kit-lanterna-traseira-led-hilux-srv-srx-com-led-2016-a-2021/up/MLBU3329265058",
+        "status_code": 200,
+        "blocked": false,
+        "captcha_detected": false,
+        "html_length": 962169,
+        "payload_count": 0,
+        "error": null
+      },
+      "extraction": {
+        "marketplace": "mercadolivre",
+        "url": "https://www.mercadolivre.com.br/kit-lanterna-traseira-led-hilux-srv-srx-com-led-2016-a-2021/up/MLBU3329265058",
+        "canonical_url": "https://www.mercadolivre.com.br/kit-lanterna-traseira-led-hilux-srv-srx-com-led-2016-a-2021/up/MLBU3329265058",
+        "title": "Kit Lanterna Traseira Led Hilux Srv Srx Com Led 2016 A 2021",
+        "price": "948.9",
+        "currency": "BRL",
+        "available": true,
+        "seller": "Produtos do vendedor",
+        "product_id": "MLBU3329265058",
+        "thumbnail_url": "https://http2.mlstatic.com/D_NQ_NP_904503-MLB105903088483_012026-O.webp",
+        "extraction_method": "ssr_state",
+        "confidence": 0.92,
+        "collected_at": "2026-05-20T15:21:24.818116Z"
+      },
+      "diagnosis": {
+        "status": "success",
+        "cause": null,
+        "recommendations": []
+      }
+    },
+    {
+      "url": "https://produto.mercadolivre.com.br/MLB-2674274038-farol-fiat-uno-2004-2005-2006-2007-2008-09-mascara-negra-_JM#reco_item_pos=1&reco_backend=item_decorator&reco_backend_type=function&reco_client=home_items-decorator-legacy&reco_id=5231b856-51ad-42bb-b4a9-8da764f3dbfe&reco_model=&c_id=/home/navigation-trends-recommendations/element&c_uid=fffcbc84-0de9-48d4-a694-e60edc34f550&da_id=navigation_trend&da_position=2&id_origin=/home/dynamic_access&da_sort_algorithm=ranker",
+      "marketplace": "mercadolivre",
+      "timestamp": "2026-05-20T12:22:03.419672",
+      "elapsed_seconds": 30.578710794448853,
+      "success": false,
+      "error_code": "REDIRECT",
+      "collection": {
+        "final_url": "https://www.mercadolivre.com.br/p/MLB2674274038",
+        "status_code": 404,
+        "blocked": false,
+        "captcha_detected": false,
+        "html_length": 147888,
+        "payload_count": 0,
+        "error": null
+      },
+      "extraction": "REDIRECT",
+      "diagnosis": {
+        "status": "failed",
+        "cause": "REDIRECIONAMENTO_NAO_PRODUTO",
+        "recommendations": [
+          "Página parece ser de busca/recomendação, não de produto único"
+        ]
+      }
+    },
+    {
+      "url": "https://www.mercadolivre.com.br/break-light-hilux-2016-2017-2018-2019-2020-luz-tampa-traseir/up/MLBU732132798",
+      "marketplace": "mercadolivre",
+      "timestamp": "2026-05-20T12:22:30.786894",
+      "elapsed_seconds": 19.358515977859497,
+      "success": true,
+      "error_code": null,
+      "collection": {
+        "final_url": "https://www.mercadolivre.com.br/break-light-hilux-2016-2017-2018-2019-2020-luz-tampa-traseir/up/MLBU732132798",
+        "status_code": 200,
+        "blocked": false,
+        "captcha_detected": false,
+        "html_length": 947590,
+        "payload_count": 0,
+        "error": null
+      },
+      "extraction": {
+        "marketplace": "mercadolivre",
+        "url": "https://www.mercadolivre.com.br/break-light-hilux-2016-2017-2018-2019-2020-luz-tampa-traseir/up/MLBU732132798",
+        "canonical_url": "https://www.mercadolivre.com.br/break-light-hilux-2016-2017-2018-2019-2020-luz-tampa-traseir/up/MLBU732132798",
+        "title": "Break Light Hilux 2016 2017 2018 2019 2020 Luz Tampa Traseir",
+        "price": "103.58",
+        "currency": "BRL",
+        "available": true,
+        "seller": "Produtos do vendedor",
+        "product_id": "MLBU732132798",
+        "thumbnail_url": "https://http2.mlstatic.com/D_NQ_NP_764339-MLB40865461380_022020-O.webp",
+        "extraction_method": "ssr_state",
+        "confidence": 0.92,
+        "collected_at": "2026-05-20T15:22:30.781157Z"
+      },
+      "diagnosis": {
+        "status": "success",
+        "cause": null,
+        "recommendations": []
+      }
+    },
+    {
+      "url": "https://produto.mercadolivre.com.br/MLB-4103190781-refletor-lanterna-parachoque-traseiro-hb20-2023-2024-2025-_JM?searchVariation=184000131856&pdp_filters=seller_id%3A193163363#polycard_client=search-desktop&be_origin=backend&searchVariation=184000131856&search_layout=grid&position=11&type=item&tracking_id=316ca3e2-7e56-4580-889d-47946efeb50e",
+      "marketplace": "mercadolivre",
+      "timestamp": "2026-05-20T12:23:04.344709",
+      "elapsed_seconds": 25.541686534881592,
+      "success": false,
+      "error_code": "REDIRECT",
+      "collection": {
+        "final_url": "https://www.mercadolivre.com.br/p/MLB4103190781",
+        "status_code": 404,
+        "blocked": false,
+        "captcha_detected": false,
+        "html_length": 146458,
+        "payload_count": 0,
+        "error": null
+      },
+      "extraction": "REDIRECT",
+      "diagnosis": {
+        "status": "failed",
+        "cause": "REDIRECIONAMENTO_NAO_PRODUTO",
+        "recommendations": [
+          "Página parece ser de busca/recomendação, não de produto único"
+        ]
+      }
+    },
+    {
+      "url": "https://www.mercadolivre.com.br/par-farol-gol-g4-power-2006-2007-2008-2009-mascara-negra/up/MLBU753798541",
+      "marketplace": "mercadolivre",
+      "timestamp": "2026-05-20T12:23:30.421009",
+      "elapsed_seconds": 18.066389799118042,
+      "success": true,
+      "error_code": null,
+      "collection": {
+        "final_url": "https://www.mercadolivre.com.br/par-farol-gol-g4-power-2006-2007-2008-2009-mascara-negra/up/MLBU753798541",
+        "status_code": 200,
+        "blocked": false,
+        "captcha_detected": false,
+        "html_length": 962256,
+        "payload_count": 0,
+        "error": null
+      },
+      "extraction": {
+        "marketplace": "mercadolivre",
+        "url": "https://www.mercadolivre.com.br/par-farol-gol-g4-power-2006-2007-2008-2009-mascara-negra/up/MLBU753798541",
+        "canonical_url": "https://www.mercadolivre.com.br/par-farol-gol-g4-power-2006-2007-2008-2009-mascara-negra/up/MLBU753798541",
+        "title": "Par Farol Gol G4 Power 2006 2007 2008 2009 Mascara Negra",
+        "price": "369.9",
+        "currency": "BRL",
+        "available": true,
+        "seller": "Produtos do vendedor",
+        "product_id": "MLBU753798541",
+        "thumbnail_url": "https://http2.mlstatic.com/D_NQ_NP_759497-MLB86280167881_062025-O.webp",
+        "extraction_method": "ssr_state",
+        "confidence": 0.92,
+        "collected_at": "2026-05-20T15:23:30.416977Z"
+      },
+      "diagnosis": {
+        "status": "success",
+        "cause": null,
+        "recommendations": []
+      }
+    }
+  ]
+}

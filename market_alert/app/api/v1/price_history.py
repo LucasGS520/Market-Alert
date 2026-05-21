@@ -5,13 +5,6 @@ Endpoints para consultar o historico de precos de um produto monitorado
 ou de um concorrente especifico. Cada entrada representa uma coleta realizada.
 """
 
-"""
-Router: historico de precos coletados.
-
-Endpoints para consultar o historico de precos de um produto monitorado
-ou de um concorrente especifico. Cada entrada representa uma coleta realizada.
-"""
-
 import uuid
 from typing import Annotated
 

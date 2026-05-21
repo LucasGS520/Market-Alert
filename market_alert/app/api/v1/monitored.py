@@ -20,7 +20,6 @@ from app.products.monitored.monitored_service import (
     create_product,
     delete_product,
     get_with_latest_comparison,
-    list_products,
     list_products_with_comparisons,
     pause_product,
     resume_product,

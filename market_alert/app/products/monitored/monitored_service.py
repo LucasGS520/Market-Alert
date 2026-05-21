@@ -2,6 +2,7 @@ import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
 import structlog
@@ -10,6 +11,9 @@ from redis import Redis
 from sqlalchemy import select
 from sqlalchemy.orm.exc import StaleDataError
 from sqlalchemy.ext.asyncio import AsyncSession
+
+if TYPE_CHECKING:
+    from app.comparison.comparison_model import Comparison
 
 from app.infra.clients.scraper import ScraperClient, ScraperParseError, ScraperUnavailableError
 from app.products.monitored.monitored_model import MonitoredProduct

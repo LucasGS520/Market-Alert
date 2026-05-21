@@ -1,0 +1,265 @@
+{
+  "timestamp": "2026-05-21T16:10:08.796497",
+  "total_results": 7,
+  "results": [
+    {
+      "url": "https://produto.mercadolivre.com.br/MLB-2674274038-farol-fiat-uno-2004-2005-2006-2007-2008-09-mascara-negra-_JM#reco_item_pos=1&reco_backend=item_decorator&reco_backend_type=function&reco_client=home_items-decorator-legacy&reco_id=5231b856-51ad-42bb-b4a9-8da764f3dbfe&reco_model=&c_id=/home/navigation-trends-recommendations/element&c_uid=fffcbc84-0de9-48d4-a694-e60edc34f550&da_id=navigation_trend&da_position=2&id_origin=/home/dynamic_access&da_sort_algorithm=ranker",
+      "marketplace": "mercadolivre",
+      "timestamp": "2026-05-21T16:10:45.564721",
+      "elapsed_seconds": 36.76817774772644,
+      "success": true,
+      "error_code": null,
+      "collection": {
+        "final_url": "https://produto.mercadolivre.com.br/MLB-2674274038-farol-fiat-uno-2004-2005-2006-2007-2008-09-mascara-negra-_JM",
+        "status_code": 200,
+        "blocked": false,
+        "captcha_detected": false,
+        "html_length": 1079076,
+        "payload_count": 0,
+        "error": null
+      },
+      "extraction": {
+        "marketplace": "mercadolivre",
+        "url": "https://produto.mercadolivre.com.br/MLB-2674274038-farol-fiat-uno-2004-2005-2006-2007-2008-09-mascara-negra-_JM",
+        "canonical_url": "https://produto.mercadolivre.com.br/MLB-2674274038-farol-fiat-uno-2004-2005-2006-2007-2008-09-mascara-negra-_JM",
+        "title": "Farol Fiat Uno 2004 2005 2006 2007 2008 09 Máscara Negra",
+        "price": "158.9",
+        "currency": "BRL",
+        "available": true,
+        "seller": null,
+        "product_id": "MLB2674274038",
+        "thumbnail_url": "https://http2.mlstatic.com/D_NQ_NP_893508-MLB50260921356_062022-O-farol-fiat-uno-2004-2005-2006-2007-2008-09-mascara-negra.webp",
+        "extraction_method": "ssr_state",
+        "confidence": 0.92,
+        "collected_at": "2026-05-21T19:10:45.560647Z"
+      },
+      "diagnosis": {
+        "status": "success",
+        "cause": null,
+        "recommendations": []
+      }
+    },
+    {
+      "url": "https://produto.mercadolivre.com.br/MLB-4103190781-refletor-lanterna-parachoque-traseiro-hb20-2023-2024-2025-_JM?searchVariation=184000131856&pdp_filters=seller_id%3A193163363#polycard_client=search-desktop&be_origin=backend&searchVariation=184000131856&search_layout=grid&position=11&type=item&tracking_id=316ca3e2-7e56-4580-889d-47946efeb50e",
+      "marketplace": "mercadolivre",
+      "timestamp": "2026-05-21T16:11:09.056623",
+      "elapsed_seconds": 15.47802996635437,
+      "success": true,
+      "error_code": null,
+      "collection": {
+        "final_url": "https://produto.mercadolivre.com.br/MLB-4103190781-refletor-lanterna-parachoque-traseiro-hb20-2023-2024-2025-_JM?searchVariation=184000131856&pdp_filters=seller_id%3A193163363",
+        "status_code": 200,
+        "blocked": false,
+        "captcha_detected": false,
+        "html_length": 1105946,
+        "payload_count": 0,
+        "error": null
+      },
+      "extraction": {
+        "marketplace": "mercadolivre",
+        "url": "https://produto.mercadolivre.com.br/MLB-4103190781-refletor-lanterna-parachoque-traseiro-hb20-2023-2024-2025-_JM?searchVariation=184000131856&pdp_filters=seller_id%3A193163363",
+        "canonical_url": "https://produto.mercadolivre.com.br/MLB-4103190781-refletor-lanterna-parachoque-traseiro-hb20-2023-2024-2025-_JM",
+        "title": "Refletor Lanterna Parachoque Traseiro Hb20 2023 2024 2025",
+        "price": "248.9",
+        "currency": "BRL",
+        "available": true,
+        "seller": null,
+        "product_id": "MLB4103190781",
+        "thumbnail_url": "https://http2.mlstatic.com/D_NQ_NP_663089-MLB98395867897_112025-O-refletor-lanterna-parachoque-traseiro-hb20-2023-2024-2025.webp",
+        "extraction_method": "ssr_state",
+        "confidence": 0.92,
+        "collected_at": "2026-05-21T19:11:09.049453Z"
+      },
+      "diagnosis": {
+        "status": "success",
+        "cause": null,
+        "recommendations": []
+      }
+    },
+    {
+      "url": "https://www.mercadolivre.com.br/kit-farol-gol-saveiro-parati-g4-mascar-negra--par-milhas-g4/up/MLBU731392586",
+      "marketplace": "mercadolivre",
+      "timestamp": "2026-05-21T16:11:33.708545",
+      "elapsed_seconds": 16.522454261779785,
+      "success": true,
+      "error_code": null,
+      "collection": {
+        "final_url": "https://www.mercadolivre.com.br/kit-farol-gol-saveiro-parati-g4-mascar-negra--par-milhas-g4/up/MLBU731392586",
+        "status_code": 200,
+        "blocked": false,
+        "captcha_detected": false,
+        "html_length": 929032,
+        "payload_count": 0,
+        "error": null
+      },
+      "extraction": {
+        "marketplace": "mercadolivre",
+        "url": "https://www.mercadolivre.com.br/kit-farol-gol-saveiro-parati-g4-mascar-negra--par-milhas-g4/up/MLBU731392586",
+        "canonical_url": "https://www.mercadolivre.com.br/kit-farol-gol-saveiro-parati-g4-mascar-negra--par-milhas-g4/up/MLBU731392586",
+        "title": "Kit Farol Gol Saveiro Parati G4 Mascar Negra + Par Milhas G4",
+        "price": "402.96",
+        "currency": "BRL",
+        "available": true,
+        "seller": "Produtos do vendedor",
+        "product_id": "MLBU731392586",
+        "thumbnail_url": "https://http2.mlstatic.com/D_NQ_NP_776874-MLB85953271934_062025-O.webp",
+        "extraction_method": "ssr_state",
+        "confidence": 0.92,
+        "collected_at": "2026-05-21T19:11:33.701895Z"
+      },
+      "diagnosis": {
+        "status": "success",
+        "cause": null,
+        "recommendations": []
+      }
+    },
+    {
+      "url": "https://produto.mercadolivre.com.br/MLB-3892541234-lanterna-traseira-led-hilux-16-17-18-19-20-21-22-23-24-_JM?searchVariation=178433374920&pdp_filters=seller_id%3A193163363#polycard_client=search-desktop&be_origin=backend&searchVariation=178433374920&search_layout=grid&position=29&type=item&tracking_id=b6bd5796-65fd-45f7-bbe3-ed7fbabec1b3",
+      "marketplace": "mercadolivre",
+      "timestamp": "2026-05-21T16:11:57.416191",
+      "elapsed_seconds": 15.690483808517456,
+      "success": true,
+      "error_code": null,
+      "collection": {
+        "final_url": "https://produto.mercadolivre.com.br/MLB-3892541234-lanterna-traseira-led-hilux-16-17-18-19-20-21-22-23-24-_JM?searchVariation=178433374920&pdp_filters=seller_id%3A193163363",
+        "status_code": 200,
+        "blocked": false,
+        "captcha_detected": false,
+        "html_length": 1072732,
+        "payload_count": 0,
+        "error": null
+      },
+      "extraction": {
+        "marketplace": "mercadolivre",
+        "url": "https://produto.mercadolivre.com.br/MLB-3892541234-lanterna-traseira-led-hilux-16-17-18-19-20-21-22-23-24-_JM?searchVariation=178433374920&pdp_filters=seller_id%3A193163363",
+        "canonical_url": "https://produto.mercadolivre.com.br/MLB-3892541234-lanterna-traseira-led-hilux-16-17-18-19-20-21-22-23-24-_JM",
+        "title": "Lanterna Traseira Led Hilux 16 17 18 19 20 21 22 23 24",
+        "price": "487.5",
+        "currency": "BRL",
+        "available": true,
+        "seller": null,
+        "product_id": "MLB3892541234",
+        "thumbnail_url": "https://http2.mlstatic.com/D_NQ_NP_674519-MLB105314869436_012026-O-lanterna-traseira-led-hilux-16-17-18-19-20-21-22-23-24.webp",
+        "extraction_method": "ssr_state",
+        "confidence": 0.92,
+        "collected_at": "2026-05-21T19:11:57.408836Z"
+      },
+      "diagnosis": {
+        "status": "success",
+        "cause": null,
+        "recommendations": []
+      }
+    },
+    {
+      "url": "https://www.mercadolivre.com.br/par-farol-palio-2008-2009-2010-siena-08-2009-2010-2011--reto/up/MLBU729640320?pdp_filters=seller_id%3A193163363#polycard_client=search-desktop&be_origin=backend&search_layout=grid&position=21&type=product&tracking_id=7c55d06b-488b-445e-8b93-788619ff7309&wid=MLB1111758259&sid=search",
+      "marketplace": "mercadolivre",
+      "timestamp": "2026-05-21T16:12:19.306567",
+      "elapsed_seconds": 13.880603313446045,
+      "success": true,
+      "error_code": null,
+      "collection": {
+        "final_url": "https://www.mercadolivre.com.br/par-farol-palio-2008-2009-2010-siena-08-2009-2010-2011--reto/up/MLBU729640320?pdp_filters=seller_id%3A193163363",
+        "status_code": 200,
+        "blocked": false,
+        "captcha_detected": false,
+        "html_length": 975016,
+        "payload_count": 0,
+        "error": null
+      },
+      "extraction": {
+        "marketplace": "mercadolivre",
+        "url": "https://www.mercadolivre.com.br/par-farol-palio-2008-2009-2010-siena-08-2009-2010-2011--reto/up/MLBU729640320?pdp_filters=seller_id%3A193163363",
+        "canonical_url": "https://www.mercadolivre.com.br/par-farol-palio-2008-2009-2010-siena-08-2009-2010-2011--reto/up/MLBU729640320",
+        "title": "Par Farol Palio 2008 2009 2010 Siena 08 2009 2010 2011  Reto",
+        "price": "599.9",
+        "currency": "BRL",
+        "available": true,
+        "seller": "Produtos do vendedor",
+        "product_id": "MLBU729640320",
+        "thumbnail_url": "https://http2.mlstatic.com/D_NQ_NP_736566-MLB110120071761_042026-O.webp",
+        "extraction_method": "ssr_state",
+        "confidence": 0.92,
+        "collected_at": "2026-05-21T19:12:19.298950Z"
+      },
+      "diagnosis": {
+        "status": "success",
+        "cause": null,
+        "recommendations": []
+      }
+    },
+    {
+      "url": "https://www.mercadolivre.com.br/lanterna-traseira-polo-2018-2019-2020-2021-2022-bicolor/up/MLBU3489801275?pdp_filters=seller_id%3A193163363#polycard_client=search-desktop&be_origin=backend&search_layout=grid&position=25&type=product&tracking_id=ff9e0a51-6844-40c0-813b-29d6dce5fe8c&wid=MLB4254532163&sid=search",
+      "marketplace": "mercadolivre",
+      "timestamp": "2026-05-21T16:12:40.680592",
+      "elapsed_seconds": 13.361445903778076,
+      "success": true,
+      "error_code": null,
+      "collection": {
+        "final_url": "https://www.mercadolivre.com.br/lanterna-traseira-polo-2018-2019-2020-2021-2022-bicolor/up/MLBU3489801275?pdp_filters=seller_id%3A193163363",
+        "status_code": 200,
+        "blocked": false,
+        "captcha_detected": false,
+        "html_length": 937347,
+        "payload_count": 0,
+        "error": null
+      },
+      "extraction": {
+        "marketplace": "mercadolivre",
+        "url": "https://www.mercadolivre.com.br/lanterna-traseira-polo-2018-2019-2020-2021-2022-bicolor/up/MLBU3489801275?pdp_filters=seller_id%3A193163363",
+        "canonical_url": "https://www.mercadolivre.com.br/lanterna-traseira-polo-2018-2019-2020-2021-2022-bicolor/up/MLBU3489801275",
+        "title": "Lanterna Traseira Polo 2018 2019 2020 2021 2022 Bicolor",
+        "price": "283.9",
+        "currency": "BRL",
+        "available": true,
+        "seller": "Produtos do vendedor",
+        "product_id": "MLBU3489801275",
+        "thumbnail_url": "https://http2.mlstatic.com/D_NQ_NP_613495-MLB94805615370_102025-O.webp",
+        "extraction_method": "ssr_state",
+        "confidence": 0.92,
+        "collected_at": "2026-05-21T19:12:40.673154Z"
+      },
+      "diagnosis": {
+        "status": "success",
+        "cause": null,
+        "recommendations": []
+      }
+    },
+    {
+      "url": "https://www.mercadolivre.com.br/lanterna-led-traseira-byd-dolphin-24-25-26/up/MLBU3727388871?pdp_filters=seller_id%3A193163363#polycard_client=search-desktop&be_origin=backend&search_layout=grid&position=43&type=product&tracking_id=5d9c5e37-2414-44e5-9125-4ecc1f6ba19e&wid=MLB6171663560&sid=search",
+      "marketplace": "mercadolivre",
+      "timestamp": "2026-05-21T16:13:05.205766",
+      "elapsed_seconds": 16.51218008995056,
+      "success": true,
+      "error_code": null,
+      "collection": {
+        "final_url": "https://www.mercadolivre.com.br/lanterna-led-traseira-byd-dolphin-24-25-26/up/MLBU3727388871?pdp_filters=seller_id%3A193163363",
+        "status_code": 200,
+        "blocked": false,
+        "captcha_detected": false,
+        "html_length": 910179,
+        "payload_count": 0,
+        "error": null
+      },
+      "extraction": {
+        "marketplace": "mercadolivre",
+        "url": "https://www.mercadolivre.com.br/lanterna-led-traseira-byd-dolphin-24-25-26/up/MLBU3727388871?pdp_filters=seller_id%3A193163363",
+        "canonical_url": "https://www.mercadolivre.com.br/lanterna-led-traseira-byd-dolphin-24-25-26/up/MLBU3727388871",
+        "title": "Lanterna Led Traseira Byd Dolphin 24 25 26",
+        "price": "464.55",
+        "currency": "BRL",
+        "available": true,
+        "seller": "Produtos do vendedor",
+        "product_id": "MLBU3727388871",
+        "thumbnail_url": "https://http2.mlstatic.com/D_NQ_NP_764083-MLB104889882839_012026-O.webp",
+        "extraction_method": "ssr_state",
+        "confidence": 0.92,
+        "collected_at": "2026-05-21T19:13:05.202736Z"
+      },
+      "diagnosis": {
+        "status": "success",
+        "cause": null,
+        "recommendations": []
+      }
+    }
+  ]
+}

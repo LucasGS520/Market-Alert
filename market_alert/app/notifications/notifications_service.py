@@ -51,6 +51,8 @@ class NotificationPayload:
     participants_count: int | None = None
 
 
+# Prioridade de consolidação: alertas de preço prevalecem sobre posição competitiva.
+# Uma comparação gera no máximo uma notificação; o tipo de maior impacto vence.
 _STATUS_RANK = {"competitive": 0, "attention": 1, "urgent": 2}
 
 
@@ -236,6 +238,8 @@ async def send_notification(
         )
         return
 
+    # Cooldown é granular por (produto × tipo de alerta): queda de preço não bloqueia
+    # alerta de disponibilidade do mesmo produto, e vice-versa.
     if is_in_cooldown(redis, payload.monitored_id, payload.alert_type):
         logger.debug(
             "notificacao_cooldown_ativo",

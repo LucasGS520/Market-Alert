@@ -34,7 +34,11 @@ logger = structlog.get_logger()
 
 
 def _liberar_lease(produto: MonitoredProduct) -> None:
-    """Libera o lease de coleta e registra o horário de término da rodada."""
+    """Libera o lease de coleta e registra o horário de término da rodada.
+
+    Deve ser chamada em todos os caminhos de encerramento — inclusive os de erro.
+    Sem liberação, o produto fica bloqueado para o scheduler até o TTL do lease expirar.
+    """
     produto.collection_lease_until = None
     produto.last_collection_finished_at = datetime.now(timezone.utc)
 
@@ -128,6 +132,8 @@ def collection_orchestrator_task(self: Task, product_id: str) -> None:
             )
             concorrentes = list(concorrentes_result.scalars().all())
 
+            # Sem concorrentes elegíveis: comparação é disparada imediatamente sem esperar rodada.
+            # com run_id=None, comparison_task não aguarda coordenação e usa apenas o produto principal.
             rodada_id: str | None = None
             if concorrentes:
                 rodada_id = str(uuid.uuid4())

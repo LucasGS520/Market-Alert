@@ -16,3 +16,9 @@ Identificadores de codigo permanecem em ingles. Comentarios explicativos e docst
 - Nao duplicar o mesmo comentario em dois idiomas.
 - Comentarios devem explicar intencao, restricao ou decisao nao obvia.
 - Comentarios que repetem a linha de codigo devem ser evitados ou removidos.
+
+## Identificadores herdados em portugues
+
+Identificadores privados preexistentes em portugues (ex: `_calcular_status`, `_liberar_lease`,
+`_fmt_preco`, `_montar_mensagem`) sao aceitos ate que uma refatoracao motivada por outro
+criterio objetivo (ADR 0005) justifique a renomeacao. Codigo novo segue a regra de ingles.

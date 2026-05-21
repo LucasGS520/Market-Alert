@@ -14,6 +14,10 @@ from app.products.monitored.monitored_model import MonitoredProduct
 
 logger = structlog.get_logger()
 
+# "paused" e "unsupported" são excluídos deliberadamente: o scheduler não reenfileira
+# produtos pausados pelo usuário nem URLs sem marketplace suportado.
+# Lease ativo (collection_lease_until no futuro) não impede a seleção aqui —
+# o controle é feito no UPDATE atômico de enqueue_with_lease.
 _ELIGIBLE_STATUSES = ("pending", "active", "unavailable", "error")
 
 

@@ -37,7 +37,7 @@ async def list_products_with_comparisons(
     session: AsyncSession,
 ) -> list[tuple["MonitoredProduct", "Comparison | None", int]]:
     from sqlalchemy import func
-    from app.comparison.comparison_model import Comparison
+    from app.comparison.comparison_model import Comparison  # import local evita circular no carregamento do módulo
     from app.products.competitor.competitor_model import Competitor
 
     products_q = await session.execute(

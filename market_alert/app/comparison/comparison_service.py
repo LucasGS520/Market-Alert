@@ -3,7 +3,6 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 import structlog
-from redis import Redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,12 +10,14 @@ from app.comparison.comparison_model import Comparison
 from app.infra.config import settings
 from app.products.competitor.competitor_model import Competitor
 from app.products.monitored.monitored_model import MonitoredProduct
-from app.workers.redis import invalidate_comparison_cache
 
 logger = structlog.get_logger()
 
 
 def _calcular_status(preco_produto: Decimal, preco_minimo: Decimal) -> str:
+    # "competitive": dentro da tolerância aceitável de preço.
+    # "attention": acima do limiar competitivo, mas ainda recuperável.
+    # "urgent": produto visivelmente mais caro que o mercado.
     if preco_minimo == 0:
         return "competitive"
     pct_acima = float((preco_produto - preco_minimo) / preco_minimo * 100)
@@ -56,7 +57,6 @@ def _snapshot_identico(anterior: Comparison, novo: dict) -> bool:
 
 async def calculate_comparison(
     session: AsyncSession,
-    redis: Redis,
     monitored_id: uuid.UUID,
     run_id: str | None = None,
     run_status: str | None = None,
@@ -161,6 +161,8 @@ async def calculate_comparison(
     }
 
     # ── 4. Deduplicação ───────────────────────────────────────────────────
+    # Snapshot repetido dentro da janela não é persistido para não inflar o histórico
+    # nem gerar notificações redundantes quando o preço está estável.
     anterior = await session.scalar(
         select(Comparison)
         .where(Comparison.monitored_id == monitored_id)
@@ -203,8 +205,6 @@ async def calculate_comparison(
     session.add(comparacao)
     await session.commit()
     await session.refresh(comparacao)
-
-    invalidate_comparison_cache(redis, monitored_id)
 
     logger.info(
         "comparacao_calculada",

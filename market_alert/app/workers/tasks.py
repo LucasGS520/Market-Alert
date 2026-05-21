@@ -44,7 +44,7 @@ from app.products.monitored.monitored_service import collect_product
 from app.workers.async_utils import run_async_task
 from app.workers.celery_app import celery_app
 from app.workers.collection_run import get_status, mark_deferred, mark_done, mark_failed, mark_skipped
-from app.workers.redis import get_redis
+from app.workers.redis import get_redis, invalidate_comparison_cache
 
 logger = structlog.get_logger()
 
@@ -268,7 +268,8 @@ def comparison_task(
     """
     redis = get_redis()
 
-    # Aguarda ou resolve estado da rodada coordenada
+    # run_id=None indica coleta autônoma (produto sem concorrentes ou concorrente independente):
+    # a comparação executa imediatamente sem aguardar rodada coordenada.
     run_status: str | None = None
     if run_id:
         rodada_status = get_status(redis, run_id)
@@ -298,9 +299,11 @@ def comparison_task(
             )
             status_anterior = comparacao_anterior.status if comparacao_anterior else None
 
-            comparacao = await calculate_comparison(session, redis, mid, run_id=run_id, run_status=run_status)
+            comparacao = await calculate_comparison(session, mid, run_id=run_id, run_status=run_status)
 
             if comparacao:
+                # Invalidação de cache é responsabilidade do worker, não do service de domínio
+                invalidate_comparison_cache(redis, mid)
                 produto = await session.get(MonitoredProduct, mid)
                 if produto:
                     # Fluxo de setup/manual (ex.: cadastro de concorrente) não gera push

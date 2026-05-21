@@ -23,6 +23,10 @@ Estados da rodada (get_status):
   partial        — todos terminaram, mas há "failed" ou "deferred"
   expired        — TTL esgotou antes de todos terminarem (chave ausente)
   no_competitors — rodada iniciada sem concorrentes
+
+Consequência operacional: "partial", "expired" e "no_competitors" permitem que a
+comparação seja calculada com os dados disponíveis (para auditoria), mas bloqueiam
+o envio de notificação. Apenas "complete" libera o fluxo completo de alerta.
 """
 
 import json

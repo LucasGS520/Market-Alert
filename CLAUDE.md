@@ -73,23 +73,30 @@ ruff format .       # formata o código
 - **DB 2** (`CELERY_RESULT_BACKEND`) — resultados de tasks Celery
 
 ### market_scraper — padrão Adapter por marketplace
-`router.py` detecta o marketplace pela URL e retorna o adapter correto. Cada adapter em `adapters/` implementa `MarketplaceAdapter` (base.py) para extrair dados daquele site. Marketplaces suportados: `mercadolivre`, `shopee`, `magalu`.
+`router.py` detecta o marketplace pela URL e retorna o adapter correto. Cada adapter em `adapters/` implementa `MarketplaceAdapter` (base.py) para extrair dados daquele site. Marketplace oficial: `mercadolivre` (único com adapter validado — ver ADR 0002).
 
 ### Camadas de market_alert/app/
 ```
-api/v1/       → endpoints HTTP (roteamento, validação de entrada)
-services/     → lógica de negócio (collection, comparison, notifications, scheduling)
-clients/      → comunicação externa (scraper HTTP, ntfy, telert)
-workers/      → tasks Celery (celery_app.py + tasks.py)
-models/       → tabelas ORM SQLAlchemy (async)
-schemas/      → modelos Pydantic para request/response
-core/         → config (pydantic-settings), database engine, redis client
+api/v1/        → endpoints HTTP finos: valida entrada, chama serviços, retorna schemas
+products/      → domínio de produto: monitored/, competitor/, price_history/
+comparison/    → cálculo e persistência de snapshots competitivos
+notifications/ → detecção de eventos, envio via ntfy e log de tentativas
+scheduling/    → política de agendamento e lease de coleta
+workers/       → tasks Celery, orquestrador de rodada, coordenação Redis
+infra/         → config, database, clients externos (scraper, ntfy)
 ```
 
 ### Variáveis de negócio importantes (`.env`)
 - `NOTIFICATION_DELTA_PERCENT` — variação mínima (%) para disparar alerta
 - `NOTIFICATION_COOLDOWN_MINUTES` — cooldown entre alertas do mesmo produto
 - `DOMAIN_CAPTCHA_COOLDOWN_SECONDS` — cooldown após CAPTCHA detectado pelo scraper
+
+### Governança documental
+A fonte de verdade para decisões arquiteturais, contratos e operação está em `docs/`:
+- `docs/architecture/adr/` — decisões arquiteturais (ADRs 0001–0005)
+- `docs/contracts/` — contratos versionáveis (API v1, scraper, workers, estado, notificações)
+- `docs/operations/runbook.md` — diagnóstico de coleta, comparação e ausência de notificação
+- `docs/architecture/glossary.md` — nomes canônicos de entidades, estados e eventos
 
 ---
 

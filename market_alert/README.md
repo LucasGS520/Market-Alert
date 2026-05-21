@@ -1,5 +1,8 @@
 # market_alert
 
+Este README descreve o backend principal. A governanca oficial de arquitetura,
+contratos, decisoes e operacao fica no [README raiz](../README.md).
+
 `market_alert` é o módulo de negócio responsável por monitorar URLs de produtos,
 coletar preços via `market_scraper`, comparar o produto monitorado com seus
 concorrentes e disparar notificações quando houver variação relevante.
@@ -223,3 +226,16 @@ docker compose up --build
 
 Validar: `http://localhost:8000/health`, `http://localhost:8000/docs`,
 PostgreSQL, Redis, workers Celery e comunicação com `market_scraper`.
+
+---
+
+## Documentacao central
+
+Contratos e decisoes que governam este servico:
+
+- [API v1](../docs/contracts/api-v1.md)
+- [Workers e Celery](../docs/contracts/workers.md)
+- [Estado duravel e operacional](../docs/contracts/state.md)
+- [Notificacoes](../docs/contracts/notifications.md)
+- [Scraper v1](../docs/contracts/scraper-v1.md)
+- [ADRs](../docs/architecture/adr)

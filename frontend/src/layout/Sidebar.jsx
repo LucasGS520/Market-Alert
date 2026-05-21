@@ -10,7 +10,7 @@ function Sidebar({ screen, setScreen, alertsCount, products, nextCollect }) {
   return (
     <aside className="ma-sidebar">
       <div className="ma-logo">
-        <img src="assets/logo-wordmark.svg" alt="Market Alert"/>
+        <img className="ma-logo-wordmark" src="assets/logo_wordmark_transparente.png" alt="Market Alert" decoding="async"/>
       </div>
       <div className="ma-nav" style={{marginTop: 4}}>
         {items.map(it => (

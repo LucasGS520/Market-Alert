@@ -9,7 +9,7 @@ from app.api.v1.schemas import CreatedWithTask
 from app.infra.database import get_session
 from app.products.competitor.competitor_schemas import CompetitorCreate, CompetitorRead
 from app.products.competitor.competitor_service import create_competitor, delete_competitor, list_competitors
-from app.products.url_utils import get_url_rejection_reason, is_valid_product_url, normalize_url
+from app.utils.url_utils import get_url_rejection_reason, is_valid_product_url, normalize_url
 
 logger = structlog.get_logger()
 

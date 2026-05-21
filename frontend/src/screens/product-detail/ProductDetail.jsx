@@ -2,20 +2,20 @@
 // Tela de detalhe: combina estado duravel do produto, comparacao e diagnostico operacional.
 const NEXT_CHECK_REASON_LABEL = {
   // Labels de motivos de agendamento calculados pelo backend.
-  price_changed:        'preÃ§o variou â€” frequÃªncia aumentada',
-  recurring:            'ciclo automÃ¡tico regular',
-  stable_backoff:       'preÃ§o estÃ¡vel â€” frequÃªncia reduzida',
-  retry_backoff:        'retry apÃ³s falha de coleta',
+  price_changed:        'preço variou — frequência aumentada',
+  recurring:            'ciclo automático regular',
+  stable_backoff:       'preço estável — frequência reduzida',
+  retry_backoff:        'retry após falha de coleta',
   manual:               'enfileirado manualmente',
-  domain_blocked:       'domÃ­nio bloqueado â€” aguardando cooldown',
-  domain_circuit_open:  'domÃ­nio bloqueado â€” circuito aberto',
+  domain_blocked:       'domínio bloqueado — aguardando cooldown',
+  domain_circuit_open:  'domínio bloqueado — circuito aberto',
 };
 
 const STABILITY_LABEL = {
   // Traducao visual da estabilidade observada nas ultimas coletas.
-  unstable:    'instÃ¡vel',
-  stable:      'estÃ¡vel',
-  very_stable: 'muito estÃ¡vel',
+  unstable:    'instável',
+  stable:      'estável',
+  very_stable: 'muito estável',
 };
 
 function CollectField({ label, value, icon, highlight }) {
@@ -24,7 +24,7 @@ function CollectField({ label, value, icon, highlight }) {
       <Icon name={icon} size={14} color={highlight ? 'var(--ma-brand-primary)' : 'var(--ma-fg-muted)'}/>
       <div>
         <div style={{fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ma-fg-subtle)'}}>{label}</div>
-        <div style={{fontFamily: 'var(--ma-font-mono)', fontSize: 12, color: highlight ? 'var(--ma-fg-strong)' : 'var(--ma-fg)', fontWeight: 600, marginTop: 2}}>{value || 'â€”'}</div>
+        <div style={{fontFamily: 'var(--ma-font-mono)', fontSize: 12, color: highlight ? 'var(--ma-fg-strong)' : 'var(--ma-fg)', fontWeight: 600, marginTop: 2}}>{value || '—'}</div>
       </div>
     </div>
   );
@@ -60,7 +60,7 @@ function ProductDetail({ product, onBack, onRefresh }) {
 
   const deleteProduct = async () => {
     // Delete remove o produto duravel; ao concluir, a tela volta para a lista.
-    if (!confirm(`Excluir "${product.name}"? Esta aÃ§Ã£o nÃ£o pode ser desfeita.`)) return;
+    if (!confirm(`Excluir "${product.name}"? Esta ação não pode ser desfeita.`)) return;
     const r = await fetch(`/api/v1/monitored/${product.id}`, { method: 'DELETE' });
     if (r.ok || r.status === 204) onBack();
   };
@@ -82,7 +82,7 @@ function ProductDetail({ product, onBack, onRefresh }) {
         <Button kind="secondary" leading={isPaused ? 'play' : 'pause'} size="sm" onClick={togglePause} disabled={toggling}>
           {isPaused ? 'Retomar' : 'Pausar'}
         </Button>
-        <Button kind="secondary" leading="external" size="sm" onClick={() => window.open(product.url_original, '_blank')}>Ver anÃºncio</Button>
+        <Button kind="secondary" leading="external" size="sm" onClick={() => window.open(product.url_original, '_blank')}>Ver anúncio</Button>
         <Button kind="danger" leading="trash" size="sm" onClick={deleteProduct}>Excluir</Button>
       </div>
 
@@ -104,8 +104,8 @@ function ProductDetail({ product, onBack, onRefresh }) {
           </div>
           <div style={{display:'flex', alignItems:'center', gap: 12, marginTop: 8, fontSize: 12, color: 'var(--ma-fg-muted)', flexWrap:'wrap'}}>
             <MarketplaceChip marketplace={product.marketplace} size="sm"/>
-            <span style={{display:'inline-flex', alignItems:'center', gap: 5}}><Icon name="clock" size={12}/>Ãºltima coleta {product.last_checked_at}</span>
-            <span style={{opacity: 0.4}}>Â·</span>
+            <span style={{display:'inline-flex', alignItems:'center', gap: 5}}><Icon name="clock" size={12}/>última coleta {product.last_checked_at}</span>
+            <span style={{opacity: 0.4}}>·</span>
             <span style={{display:'inline-flex', alignItems:'center', gap: 5, fontFamily: 'var(--ma-font-mono)'}}>id: {product.id}</span>
           </div>
         </div>
@@ -116,9 +116,9 @@ function ProductDetail({ product, onBack, onRefresh }) {
         <div style={{display:'flex', alignItems:'center', gap: 12, padding: '12px 16px', marginBottom: 16, background: 'rgba(224,73,73,0.10)', border: '1px solid rgba(224,73,73,0.35)', borderRadius: 'var(--ma-radius-md)'}}>
           <Icon name="warning" size={18} color="var(--ma-danger)"/>
           <div style={{flex: 1, fontSize: 13}}>
-            <b style={{color: 'var(--ma-fg-strong)'}}>Ãšltima coleta falhou</b> Â·
-            tentativas consecutivas: <span style={{fontFamily:'var(--ma-font-mono)', color:'var(--ma-fg-strong)', fontWeight: 600}}>{product.consecutive_failures}</span> Â·
-            prÃ³xima tentativa <span style={{fontFamily:'var(--ma-font-mono)', color:'var(--ma-fg-strong)', fontWeight: 600}}>{product.next_check_at || 'â€”'}</span>
+            <b style={{color: 'var(--ma-fg-strong)'}}>Última coleta falhou</b> ·
+            tentativas consecutivas: <span style={{fontFamily:'var(--ma-font-mono)', color:'var(--ma-fg-strong)', fontWeight: 600}}>{product.consecutive_failures}</span> ·
+            próxima tentativa <span style={{fontFamily:'var(--ma-font-mono)', color:'var(--ma-fg-strong)', fontWeight: 600}}>{product.next_check_at || '—'}</span>
           </div>
         </div>
       )}
@@ -129,7 +129,7 @@ function ProductDetail({ product, onBack, onRefresh }) {
           <div className="ma-chart-head">
             <div className="left">
               <div className="label">
-                {product.is_price_stale ? 'Ãšltimo preÃ§o vÃ¡lido Â· seu produto' : 'PreÃ§o atual Â· seu produto'}
+                {product.is_price_stale ? 'Último preço válido · seu produto' : 'Preço atual · seu produto'}
               </div>
               <div className="value" style={product.is_price_stale ? {color: 'var(--ma-fg-muted)'} : {}}>
                 {brl(product.current_price)}
@@ -137,7 +137,7 @@ function ProductDetail({ product, onBack, onRefresh }) {
               {product.is_price_stale && (
                 <div style={{fontSize: 11, color: 'var(--ma-danger)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 2}}>
                   <Icon name="warning" size={11}/>
-                  dado obsoleto Â· coletado em {product.last_successful_collection_at || product.last_checked_at || 'â€”'}
+                  dado obsoleto · coletado em {product.last_successful_collection_at || product.last_checked_at || '—'}
                 </div>
               )}
               <div className="delta">
@@ -157,7 +157,7 @@ function ProductDetail({ product, onBack, onRefresh }) {
         </div>
 
         <Card>
-          <div className="ma-eyebrow">ComparaÃ§Ã£o com o mercado</div>
+          <div className="ma-eyebrow">Comparação com o mercado</div>
           {cmp ? (
             <>
               <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 14}}>
@@ -169,7 +169,7 @@ function ProductDetail({ product, onBack, onRefresh }) {
                   return (
                     <div>
                       <div className="ma-kpi-label" style={{display:'flex', alignItems:'center', gap: 6}}>
-                        Sua posiÃ§Ã£o
+                        Sua posição
                         {cmp.run_status === 'partial' && (
                           <Tag tone="warning" size="xs">rodada parcial</Tag>
                         )}
@@ -181,13 +181,13 @@ function ProductDetail({ product, onBack, onRefresh }) {
                           </div>
                           <div className="ma-kpi-sub">
                             {cmp.ranking === 1
-                              ? 'menor preÃ§o do mercado'
+                              ? 'menor preço do mercado'
                               : `${cmp.ranking - 1} concorrente${cmp.ranking - 1 > 1 ? 's' : ''} mais barato${cmp.ranking - 1 > 1 ? 's' : ''}`}
                           </div>
                         </>
                       ) : (
                         <>
-                          <div className="ma-kpi-value" style={{fontSize: 28, color: 'var(--ma-fg-muted)'}}>â€” / â€”</div>
+                          <div className="ma-kpi-value" style={{fontSize: 28, color: 'var(--ma-fg-muted)'}}>— / —</div>
                           <div className="ma-kpi-sub" style={{color: 'var(--ma-fg-subtle)'}}>
                             {cmp.run_status === 'no_competitors' ? 'sem concorrentes na rodada' : 'dados insuficientes'}
                           </div>
@@ -197,13 +197,13 @@ function ProductDetail({ product, onBack, onRefresh }) {
                   );
                 })()}
                 <div>
-                  <div className="ma-kpi-label">PreÃ§o mÃ©dio</div>
+                  <div className="ma-kpi-label">Preço médio</div>
                   <div className="ma-kpi-value" style={{fontSize: 28}}>{brl(cmp.average_price)}</div>
                   <div className="ma-kpi-sub">
                     {product.current_price != null && cmp.average_price != null && (
                       product.current_price < cmp.average_price
-                        ? `vocÃª estÃ¡ ${((1 - product.current_price / cmp.average_price) * 100).toFixed(1).replace('.', ',')}% abaixo`
-                        : `vocÃª estÃ¡ ${((product.current_price / cmp.average_price - 1) * 100).toFixed(1).replace('.', ',')}% acima`
+                        ? `você está ${((1 - product.current_price / cmp.average_price) * 100).toFixed(1).replace('.', ',')}% abaixo`
+                        : `você está ${((product.current_price / cmp.average_price - 1) * 100).toFixed(1).replace('.', ',')}% acima`
                     )}
                   </div>
                 </div>
@@ -220,14 +220,14 @@ function ProductDetail({ product, onBack, onRefresh }) {
                 </div>
                 <div style={{marginLeft: 'auto'}}>
                   <span className="ma-meta">rodada</span>
-                  <div style={{fontFamily:'var(--ma-font-mono)', color:'var(--ma-fg-strong)', fontWeight: 600, textTransform: 'lowercase'}}>{cmp.run_status || 'â€”'} Â· {cmp.valid_competitors_count || 0}/{(cmp.participants_count || 1) - 1}</div>
+                  <div style={{fontFamily:'var(--ma-font-mono)', color:'var(--ma-fg-strong)', fontWeight: 600, textTransform: 'lowercase'}}>{cmp.run_status || '—'} · {cmp.valid_competitors_count || 0}/{(cmp.participants_count || 1) - 1}</div>
                 </div>
               </div>
               {cmp.potential_adjustment != null && (
                 <div style={{marginTop: 14, padding: 12, background: 'rgba(255,196,0,0.06)', borderRadius: 'var(--ma-radius-sm)', border: '1px solid rgba(255,196,0,0.18)'}}>
                   <div className="ma-eyebrow" style={{color: 'var(--ma-brand-secondary)', marginBottom: 4}}>Ajuste sugerido</div>
                   <div style={{fontSize: 13, color: 'var(--ma-fg)', lineHeight: 1.5}}>
-                    Reduzir <b style={{fontFamily:'var(--ma-font-mono)', color: 'var(--ma-brand-secondary)'}}>{brl(Math.abs(Number(cmp.potential_adjustment)))}</b> levaria vocÃª a <b style={{color: 'var(--ma-fg-strong)'}}>#{Math.max(1, cmp.ranking - 3)}</b>.
+                    Reduzir <b style={{fontFamily:'var(--ma-font-mono)', color: 'var(--ma-brand-secondary)'}}>{brl(Math.abs(Number(cmp.potential_adjustment)))}</b> levaria você a <b style={{color: 'var(--ma-fg-strong)'}}>#{Math.max(1, cmp.ranking - 3)}</b>.
                   </div>
                 </div>
               )}
@@ -235,7 +235,7 @@ function ProductDetail({ product, onBack, onRefresh }) {
           ) : (
             <div style={{padding: '24px 4px', textAlign: 'center', color: 'var(--ma-fg-muted)', fontSize: 12}}>
               <Icon name="warning" size={24} color="var(--ma-fg-subtle)"/>
-              <div style={{marginTop: 8}}>ComparaÃ§Ã£o ainda nÃ£o calculada para este produto.</div>
+              <div style={{marginTop: 8}}>Comparação ainda não calculada para este produto.</div>
             </div>
           )}
         </Card>
@@ -245,10 +245,10 @@ function ProductDetail({ product, onBack, onRefresh }) {
       <Card className="ma-collect-strip" style={{marginTop: 16, padding: '12px 18px'}}>
         <div style={{display:'flex', alignItems:'center', gap: 24, flexWrap:'wrap'}}>
           <StatusDot status={effectiveStatus}/>
-          <CollectField label="Ãšltima coleta" value={product.last_checked_at} icon="refresh"/>
-          <CollectField label="PrÃ³xima coleta" value={isPaused ? 'â€”' : (product.next_check_at || 'â€”')} icon="clock" highlight={!isPaused}/>
+          <CollectField label="Última coleta" value={product.last_checked_at} icon="refresh"/>
+          <CollectField label="Próxima coleta" value={isPaused ? '—' : (product.next_check_at || '—')} icon="clock" highlight={!isPaused}/>
           <CollectField label="Intervalo atual" value={`${product.check_interval_minutes} min`} icon="calendar"/>
-          <CollectField label="Estabilidade" value={STABILITY_LABEL[product.stability_level] || (product.stability_level || 'â€”')} icon="target"/>
+          <CollectField label="Estabilidade" value={STABILITY_LABEL[product.stability_level] || (product.stability_level || '—')} icon="target"/>
           {product.next_check_reason && (
             <CollectField label="Motivo" value={NEXT_CHECK_REASON_LABEL[product.next_check_reason] || product.next_check_reason} icon="zap"/>
           )}
@@ -263,7 +263,7 @@ function ProductDetail({ product, onBack, onRefresh }) {
         <>
           <div className="ma-section-head">
             <h2>Concorrentes</h2>
-            <span className="ma-section-meta">{competitors.length} fonte{competitors.length !== 1 ? 's' : ''} monitorada{competitors.length !== 1 ? 's' : ''} Â· ordenado por preÃ§o</span>
+            <span className="ma-section-meta">{competitors.length} fonte{competitors.length !== 1 ? 's' : ''} monitorada{competitors.length !== 1 ? 's' : ''} · ordenado por preço</span>
           </div>
           <Card padded={false}>
             {[...competitors].sort((a, b) => (a.current_price || 0) - (b.current_price || 0)).map((c, i) => {
@@ -281,16 +281,16 @@ function ProductDetail({ product, onBack, onRefresh }) {
                       <span style={{fontSize: 10, color: 'var(--ma-fg-subtle)', fontFamily: 'var(--ma-font-mono)', background: 'var(--ma-neutral-500)', padding: '1px 6px', borderRadius: 4}}>#{i + 1}</span>
                       <MarketplaceChip marketplace={c.marketplace} size="sm"/>
                     </div>
-                    <div className="ma-comp-seen">coletado {c.last_checked_at} Â· {isBelow ? 'abaixo do seu preÃ§o' : 'acima do seu preÃ§o'}</div>
+                    <div className="ma-comp-seen">coletado {c.last_checked_at} · {isBelow ? 'abaixo do seu preço' : 'acima do seu preço'}</div>
                   </div>
                   <div className="ma-comp-price">{brl(c.current_price)}</div>
                   <div><VariationBadge value={c.variation_24h}/></div>
                   <div className={`ma-comp-diff ${isBelow ? 'above' : 'below'}`}>
-                    {diff > 0 ? '+' : 'âˆ’'}{brl(Math.abs(diff)).replace('R$ ', 'R$Â ')}
-                    <div style={{fontSize: 10, opacity: 0.7}}>{diff > 0 ? '+' : 'âˆ’'}{Math.abs(diffPct).toFixed(1).replace('.', ',')}%</div>
+                    {diff > 0 ? '+' : '−'}{brl(Math.abs(diff)).replace('R$ ', 'R$ ')}
+                    <div style={{fontSize: 10, opacity: 0.7}}>{diff > 0 ? '+' : '−'}{Math.abs(diffPct).toFixed(1).replace('.', ',')}%</div>
                   </div>
                   <div style={{display:'flex', gap: 4, justifyContent:'flex-end'}}>
-                    <IconButton name="external" size="sm" title="Ver anÃºncio" onClick={() => window.open(c.url_original, '_blank')}/>
+                    <IconButton name="external" size="sm" title="Ver anúncio" onClick={() => window.open(c.url_original, '_blank')}/>
                     <IconButton name="trash" size="sm" title="Excluir concorrente" onClick={() => deleteCompetitor(c.id)}/>
                   </div>
                 </div>

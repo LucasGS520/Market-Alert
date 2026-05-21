@@ -1,7 +1,7 @@
 # Contrato de Notificacoes
 
 Versao: 1.0  
-Proprietario logico: `market_alert/app/notifications` e `market_alert/app/workers/tasks.py`  
+Proprietario logico: `backend/market_alert/app/notifications` e `backend/market_alert/app/workers/tasks.py`  
 Consumidores: frontend, operadores, ntfy.
 
 ## Quando gera alerta

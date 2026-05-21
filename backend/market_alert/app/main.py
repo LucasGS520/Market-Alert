@@ -19,7 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
-from app.api.v1.router import router
+from app.api.v1.api_router import router
 from app.infra.database import AsyncSessionLocal, configure_orm_mappers, engine
 
 logger = structlog.get_logger()

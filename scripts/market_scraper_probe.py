@@ -26,13 +26,13 @@ from urllib.request import Request, urlopen
 from datetime import datetime
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
-SCRAPER_DIR = ROOT_DIR / "market_scraper"
+SCRAPER_DIR = ROOT_DIR / "backend" / "market_scraper"
 
 for path in (ROOT_DIR, SCRAPER_DIR):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
-_router_module = importlib.import_module("app.router")
+_router_module = importlib.import_module("app.marketplace_router")
 _schemas_module = importlib.import_module("app.schemas")
 _browser_module = importlib.import_module("app.scraping.browser")
 
@@ -44,6 +44,11 @@ BrowserSession = _browser_module.BrowserSession
 DEFAULT_URLS = [
     "https://produto.mercadolivre.com.br/MLB-2674274038-farol-fiat-uno-2004-2005-2006-2007-2008-09-mascara-negra-_JM#reco_item_pos=1&reco_backend=item_decorator&reco_backend_type=function&reco_client=home_items-decorator-legacy&reco_id=5231b856-51ad-42bb-b4a9-8da764f3dbfe&reco_model=&c_id=/home/navigation-trends-recommendations/element&c_uid=fffcbc84-0de9-48d4-a694-e60edc34f550&da_id=navigation_trend&da_position=2&id_origin=/home/dynamic_access&da_sort_algorithm=ranker",
     "https://produto.mercadolivre.com.br/MLB-4103190781-refletor-lanterna-parachoque-traseiro-hb20-2023-2024-2025-_JM?searchVariation=184000131856&pdp_filters=seller_id%3A193163363#polycard_client=search-desktop&be_origin=backend&searchVariation=184000131856&search_layout=grid&position=11&type=item&tracking_id=316ca3e2-7e56-4580-889d-47946efeb50e",
+    "https://www.mercadolivre.com.br/kit-farol-gol-saveiro-parati-g4-mascar-negra--par-milhas-g4/up/MLBU731392586",
+    "https://produto.mercadolivre.com.br/MLB-3892541234-lanterna-traseira-led-hilux-16-17-18-19-20-21-22-23-24-_JM?searchVariation=178433374920&pdp_filters=seller_id%3A193163363#polycard_client=search-desktop&be_origin=backend&searchVariation=178433374920&search_layout=grid&position=29&type=item&tracking_id=b6bd5796-65fd-45f7-bbe3-ed7fbabec1b3",
+    "https://www.mercadolivre.com.br/par-farol-palio-2008-2009-2010-siena-08-2009-2010-2011--reto/up/MLBU729640320?pdp_filters=seller_id%3A193163363#polycard_client=search-desktop&be_origin=backend&search_layout=grid&position=21&type=product&tracking_id=7c55d06b-488b-445e-8b93-788619ff7309&wid=MLB1111758259&sid=search",
+    "https://www.mercadolivre.com.br/lanterna-traseira-polo-2018-2019-2020-2021-2022-bicolor/up/MLBU3489801275?pdp_filters=seller_id%3A193163363#polycard_client=search-desktop&be_origin=backend&search_layout=grid&position=25&type=product&tracking_id=ff9e0a51-6844-40c0-813b-29d6dce5fe8c&wid=MLB4254532163&sid=search",
+    "https://www.mercadolivre.com.br/lanterna-led-traseira-byd-dolphin-24-25-26/up/MLBU3727388871?pdp_filters=seller_id%3A193163363#polycard_client=search-desktop&be_origin=backend&search_layout=grid&position=43&type=product&tracking_id=5d9c5e37-2414-44e5-9125-4ecc1f6ba19e&wid=MLB6171663560&sid=search",
 ]
 
 DEFAULT_API_URL = "http://127.0.0.1:8001/scraper/parse"

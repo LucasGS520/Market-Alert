@@ -25,7 +25,7 @@ from app.infra.database import AsyncSessionLocal
 from app.products.competitor.competitor_model import Competitor
 from app.products.monitored.monitored_model import MonitoredProduct
 from app.products.monitored.monitored_service import collect_product
-from app.workers.async_utils import run_async_task
+from app.utils.async_utils import run_async_task
 from app.workers.celery_app import celery_app
 from app.workers.collection_run import start_run
 from app.workers.redis import get_redis

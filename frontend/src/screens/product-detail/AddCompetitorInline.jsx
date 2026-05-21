@@ -40,7 +40,7 @@ function AddCompetitorInline({ productId, onAdded }) {
       <div className="ma-input" style={{height: 32, flex: '0 1 160px'}}>
         <input value={name} onChange={e => setName(e.target.value)} placeholder="Nome (opcional)" onKeyDown={e => e.key === 'Enter' && submit()}/>
       </div>
-      <Button kind="primary" size="sm" leading="check" onClick={submit} disabled={saving}>{saving ? 'Salvandoâ€¦' : 'Adicionar'}</Button>
+      <Button kind="primary" size="sm" leading="check" onClick={submit} disabled={saving}>{saving ? 'Salvando…' : 'Adicionar'}</Button>
       <Button kind="ghost" size="sm" onClick={() => { setOpen(false); setErr(null); }}>Cancelar</Button>
       {err && <span style={{fontSize: 11, color: 'var(--ma-danger)', width: '100%'}}>{err}</span>}
     </div>

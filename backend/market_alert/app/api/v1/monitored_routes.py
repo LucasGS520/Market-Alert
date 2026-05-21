@@ -24,7 +24,7 @@ from app.products.monitored.monitored_service import (
     pause_product,
     resume_product,
 )
-from app.products.url_utils import get_url_rejection_reason, is_valid_product_url, normalize_url
+from app.utils.url_utils import get_url_rejection_reason, is_valid_product_url, normalize_url
 from app.api.v1.schemas import CreatedWithTask
 from app.scheduling.scheduler_service import enqueue_with_lease
 from app.workers.redis import (

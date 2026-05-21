@@ -1,8 +1,8 @@
 # Contrato Scraper v1
 
 Versao: 1.0  
-Proprietario logico: `market_scraper`  
-Consumidores: `market_alert/app/infra/clients/scraper.py` e services de coleta.
+Proprietario logico: `backend/market_scraper`  
+Consumidores: `backend/market_alert/app/infra/clients/scraper.py` e services de coleta.
 
 ## Endpoint
 

@@ -23,37 +23,6 @@ O scraper nao decide comparacao, agendamento, notificacao ou persistencia de neg
 - `app/schemas.py`: contrato de sucesso, erro, metodos de extracao e confidence minima.
 - `app/core/config.py`: configuracoes operacionais.
 
-## Contrato HTTP
-
-Contrato oficial: [docs/contracts/scraper-v1.md](../docs/contracts/scraper-v1.md).
-
-Endpoint:
-
-```text
-POST /scraper/parse
-```
-
-Request:
-
-```json
-{
-  "url": "https://www.mercadolivre.com.br/produto"
-}
-```
-
-Respostas principais:
-
-- `200`: extracao bem-sucedida.
-- `422`: erro semantico como `MARKETPLACE_NOT_SUPPORTED` ou `PRICE_NOT_FOUND`.
-- `503`: browser ainda nao pronto.
-- `504`: timeout global.
-
-## Health checks
-
-- `/live`: processo vivo.
-- `/ready`: browser inicializado e pronto.
-- `/health`: alias operacional de prontidao.
-
 ## Marketplace
 
 Mercado Livre e o unico marketplace oficialmente suportado:
@@ -61,7 +30,7 @@ Mercado Livre e o unico marketplace oficialmente suportado:
 - `mercadolivre.com.br`
 - `mercadolibre.com`
 
-Adicionar outro marketplace exige adapter validado, contrato atualizado e ADR nova.
+Adicionar outro marketplace exige adapter validado e contrato atualizado.
 
 ## Regra de manutencao
 

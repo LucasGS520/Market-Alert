@@ -1,7 +1,7 @@
 # Fluxo E2E Oficial
 
 Versao: 1.0  
-Fonte de verdade: comportamento observado no runtime atual e codigo em `frontend`, `market_alert` e `market_scraper`.
+Fonte de verdade: comportamento observado no runtime atual e codigo em `frontend`, `backend/market_alert` e `backend/market_scraper`.
 
 ## Visao geral
 

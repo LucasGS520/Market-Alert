@@ -85,7 +85,7 @@ async def list_products_with_comparisons(
 
 
 async def create_product(session: AsyncSession, url: str, name: str | None) -> MonitoredProduct:
-    from app.products.url_utils import normalize_url
+    from app.utils.url_utils import normalize_url
 
     url_normalized = normalize_url(url)
     existente = await session.scalar(
@@ -374,7 +374,7 @@ async def collect_product(
             # Canonicalização persistente
             if resultado.canonical_url and resultado.confidence >= 0.90:
                 from sqlalchemy.exc import IntegrityError
-                from app.products.url_utils import normalize_url
+                from app.utils.url_utils import normalize_url
                 canon_normalized = normalize_url(resultado.canonical_url)
                 if canon_normalized != product.url_normalized:
                     try:

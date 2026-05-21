@@ -1,7 +1,7 @@
 # Contrato de Estado
 
 Versao: 1.0  
-Proprietario logico: `market_alert/app/infra`, `market_alert/app/workers`, migrations Alembic.
+Proprietario logico: `backend/market_alert/app/infra`, `backend/market_alert/app/workers`, migrations Alembic.
 
 ## Decisao
 

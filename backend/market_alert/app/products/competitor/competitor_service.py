@@ -27,7 +27,7 @@ async def create_competitor(
     session: AsyncSession, monitored_id: uuid.UUID, url: str, name: str | None
 ) -> Competitor:
     from app.infra.config import settings
-    from app.products.url_utils import normalize_url
+    from app.utils.url_utils import normalize_url
 
     produto = await session.get(MonitoredProduct, monitored_id)
     if not produto:
@@ -213,7 +213,7 @@ async def collect_competitor(
             # o scraper devolve uma canonical_url confiável diferente da URL armazenada.
             if resultado.canonical_url and resultado.confidence >= 0.90:
                 from sqlalchemy.exc import IntegrityError
-                from app.products.url_utils import normalize_url
+                from app.utils.url_utils import normalize_url
                 canon_normalized = normalize_url(resultado.canonical_url)
                 if canon_normalized != competitor.url_normalized:
                     try:

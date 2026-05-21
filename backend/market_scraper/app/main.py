@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from pydantic import AnyHttpUrl, BaseModel
 
 from app.core.config import settings
-from app.router import MarketplaceRouter
+from app.marketplace_router import MarketplaceRouter
 from app.schemas import ErrorCode, ScrapeError, ScrapeResult
 from app.scraping.browser import BrowserSession
 

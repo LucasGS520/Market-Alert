@@ -108,7 +108,7 @@ O intervalo entre coletas (`check_interval_minutes`) se ajusta automaticamente:
 | Preço estável por N tentativas         | `min(MAX, atual × 2)` — reduz frequência             |
 | Demais                                 | Mantém intervalo atual                               |
 
-`next_check_at` aplica jitter de ±20 % sobre o intervalo para evitar
+`next_check_at` aplica jitter sobre o intervalo para evitar
 thundering herd entre produtos com intervalos similares.
 
 Parâmetros relevantes: `MIN_CHECK_INTERVAL_MINUTES`, `MAX_CHECK_INTERVAL_MINUTES`,
@@ -202,40 +202,7 @@ scheduler_task()                    # dispara pelo Beat a cada 1 minuto
 | `DOMAIN_CAPTCHA_COOLDOWN_SECONDS`     | `300`  | Cooldown de domínio após CAPTCHA ou bloqueio            |
 | `DOMAIN_RATE_LIMIT_TTL_SECONDS`       | `2`    | Cooldown curto entre coletas do mesmo domínio           |
 | `SCRAPER_TIMEOUT_SECONDS`             | `270`  | Timeout do cliente `market_alert` ao chamar o scraper   |
-| `MAX_TOTAL_REQUEST_SECONDS`           | `240`  | Timeout global por parse dentro do `market_scraper`     |
+| `MAX_TOTAL_REQUEST_SECONDS`           | `240`  | Timeout global por parse dentro do `backend/market_scraper`     |
 | `PLAYWRIGHT_TIMEOUT_MS`               | `60000`| Timeout de navegação/espera do Playwright               |
 | `NOTIFICATION_DELTA_PERCENT`          | `5.0`  | Variação mínima (%) para disparar alerta                |
 | `NOTIFICATION_COOLDOWN_MINUTES`       | `30`   | Cooldown entre alertas do mesmo produto                 |
-
----
-
-## Validação operacional
-
-```powershell
-# Dentro de market_alert/
-python -c "import app.main; import app.workers.tasks"
-pytest
-alembic upgrade head
-```
-
-Com Docker:
-
-```powershell
-docker compose up --build
-```
-
-Validar: `http://localhost:8000/health`, `http://localhost:8000/docs`,
-PostgreSQL, Redis, workers Celery e comunicação com `market_scraper`.
-
----
-
-## Documentacao central
-
-Contratos e decisoes que governam este servico:
-
-- [API v1](../docs/contracts/api-v1.md)
-- [Workers e Celery](../docs/contracts/workers.md)
-- [Estado duravel e operacional](../docs/contracts/state.md)
-- [Notificacoes](../docs/contracts/notifications.md)
-- [Scraper v1](../docs/contracts/scraper-v1.md)
-- [ADRs](../docs/architecture/adr)

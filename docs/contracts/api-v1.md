@@ -1,7 +1,7 @@
 # Contrato API v1
 
 Versao: 1.0  
-Proprietario logico: `market_alert/app/api/v1`  
+Proprietario logico: `backend/market_alert/app/api/v1`  
 Consumidores: frontend, operadores via Swagger/OpenAPI, scripts locais.
 
 ## Regras gerais

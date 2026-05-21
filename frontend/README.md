@@ -32,8 +32,6 @@ A ordem dos scripts em `index.html` e parte do contrato operacional: API e forma
 - Alertas (`src/screens/alerts`): lista tentativas de notificacao retornadas por `/api/v1/notifications`.
 - Detalhe do produto (`src/screens/product-detail`): carrega produto, concorrentes, historico, health de coleta e acoes de pause/resume/delete.
 
-Contrato oficial da API consumida: [docs/contracts/api-v1.md](../docs/contracts/api-v1.md).
-
 ## Marketplace
 
 Mercado Livre e o unico marketplace oficialmente suportado no frontend. Qualquer copy ou metadado visual para outros marketplaces deve ser tratado como inconsistencia historica ou compatibilidade visual nao oficial, sem ampliar suporte funcional.

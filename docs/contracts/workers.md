@@ -1,7 +1,7 @@
 # Contrato Workers e Celery
 
 Versao: 1.0  
-Proprietario logico: `market_alert/app/workers`  
+Proprietario logico: `backend/market_alert/app/workers`  
 Consumidores: API, scheduler, services de dominio e operadores.
 
 ## Filas

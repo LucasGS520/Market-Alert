@@ -9,8 +9,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Objetivo:** monitorar preços de produtos em e-commerce, comparar com concorrentes e enviar alertas quando houver variação relevante.
 
 **Serviços:**
-- `market_alert/` — API principal (FastAPI, porta 8000): CRUD de produtos monitorados, concorrentes, histórico e comparações. Orquestra workers Celery.
-- `market_scraper/` — Microserviço de scraping (FastAPI, porta 8001): extrai preço/nome/disponibilidade via Playwright + curl-cffi. Stateless.
+- `backend/market_alert/` — API principal (FastAPI, porta 8000): CRUD de produtos monitorados, concorrentes, histórico e comparações. Orquestra workers Celery.
+- `backend/market_scraper/` — Microserviço de scraping (FastAPI, porta 8001): extrai preço/nome/disponibilidade via Playwright + curl-cffi. Stateless.
 
 ---
 
@@ -24,7 +24,7 @@ docker compose logs -f         # acompanha logs
 docker compose down            # derruba serviços
 ```
 
-### Localmente (dentro de market_alert/ ou market_scraper/)
+### Localmente (dentro de backend/market_alert/ ou backend/market_scraper/)
 ```bash
 # API principal
 uvicorn app.main:app --reload --port 8000
@@ -32,7 +32,7 @@ uvicorn app.main:app --reload --port 8000
 # Microserviço scraper
 uvicorn app.main:app --reload --port 8001
 
-# Workers Celery (executar na raiz de market_alert/)
+# Workers Celery (executar na raiz de backend/market_alert/)
 celery -A app.workers.celery_app worker --queues=collection --concurrency=2
 celery -A app.workers.celery_app worker --queues=comparison,default --concurrency=4
 celery -A app.workers.celery_app beat
@@ -75,7 +75,7 @@ ruff format .       # formata o código
 ### market_scraper — padrão Adapter por marketplace
 `router.py` detecta o marketplace pela URL e retorna o adapter correto. Cada adapter em `adapters/` implementa `MarketplaceAdapter` (base.py) para extrair dados daquele site. Marketplace oficial: `mercadolivre` (único com adapter validado — ver ADR 0002).
 
-### Camadas de market_alert/app/
+### Camadas de backend/market_alert/app/
 ```
 api/v1/        → endpoints HTTP finos: valida entrada, chama serviços, retorna schemas
 products/      → domínio de produto: monitored/, competitor/, price_history/

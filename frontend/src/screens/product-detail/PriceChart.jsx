@@ -5,7 +5,7 @@ function PriceChart({ data, height = 220 }) {
     return (
       <div style={{height, display:'flex', alignItems:'center', justifyContent:'center', color:'var(--ma-fg-subtle)', fontSize: 12, gap: 8}}>
         <Icon name="warning" size={14}/>
-        Sem histÃ³rico de preÃ§os ainda.
+        Sem histórico de preços ainda.
       </div>
     );
   }

@@ -7,7 +7,7 @@ const OUTCOME_STYLE = {
   blocked:            { color: 'var(--ma-danger)',   icon: 'warning', label: 'bloqueado' },
   domain_circuit_open:{ color: 'var(--ma-warning)',  icon: 'clock',   label: 'circuit aberto' },
   timeout:            { color: 'var(--ma-warning)',  icon: 'clock',   label: 'timeout' },
-  price_not_found:    { color: 'var(--ma-fg-muted)', icon: 'warning', label: 'preÃ§o nÃ£o encontrado' },
+  price_not_found:    { color: 'var(--ma-fg-muted)', icon: 'warning', label: 'preço não encontrado' },
   rate_limited:       { color: 'var(--ma-warning)',  icon: 'warning', label: 'rate limit' },
 };
 
@@ -48,10 +48,10 @@ function CollectionDiagnostic({ productId }) {
         }}
       >
         <Icon name="zap" size={12} color="var(--ma-fg-muted)"/>
-        <span style={{flex: 1, textAlign: 'left'}}>DiagnÃ³stico de Coleta</span>
+        <span style={{flex: 1, textAlign: 'left'}}>Diagnóstico de Coleta</span>
         {health && circuitOpen && (
           <span style={{fontSize: 10, padding: '2px 8px', borderRadius: 4, background: 'var(--ma-danger)', color: '#fff', fontWeight: 800}}>
-            CIRCUIT OPEN Â· {health.circuit_cooldown_seconds}s
+            CIRCUIT OPEN · {health.circuit_cooldown_seconds}s
           </span>
         )}
         {health && !circuitOpen && (
@@ -64,22 +64,22 @@ function CollectionDiagnostic({ productId }) {
 
       {open && (
         <div style={{padding: '12px 16px', background: 'var(--ma-neutral-800)'}}>
-          {loading && <div style={{color: 'var(--ma-fg-subtle)', fontSize: 12}}>Carregandoâ€¦</div>}
+          {loading && <div style={{color: 'var(--ma-fg-subtle)', fontSize: 12}}>Carregando…</div>}
           {health && (
             <>
               <div style={{display: 'flex', gap: 24, flexWrap: 'wrap', marginBottom: 12}}>
                 <div>
-                  <div style={{fontSize: 10, color: 'var(--ma-fg-subtle)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2}}>DomÃ­nio</div>
+                  <div style={{fontSize: 10, color: 'var(--ma-fg-subtle)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2}}>Domínio</div>
                   <div style={{fontFamily: 'var(--ma-font-mono)', fontSize: 12, color: 'var(--ma-fg)'}}>{health.domain}</div>
                 </div>
                 <div>
-                  <div style={{fontSize: 10, color: 'var(--ma-fg-subtle)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2}}>Ãšltima coleta bem-sucedida</div>
-                  <div style={{fontFamily: 'var(--ma-font-mono)', fontSize: 12, color: 'var(--ma-fg)'}}>{health.last_successful_collection_at || 'â€”'}</div>
+                  <div style={{fontSize: 10, color: 'var(--ma-fg-subtle)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2}}>Última coleta bem-sucedida</div>
+                  <div style={{fontFamily: 'var(--ma-font-mono)', fontSize: 12, color: 'var(--ma-fg)'}}>{health.last_successful_collection_at || '—'}</div>
                 </div>
               </div>
               {health.recent_attempts.length > 0 ? (
                 <div style={{display: 'flex', flexDirection: 'column', gap: 4}}>
-                  <div style={{fontSize: 10, color: 'var(--ma-fg-subtle)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4}}>Ãšltimas tentativas</div>
+                  <div style={{fontSize: 10, color: 'var(--ma-fg-subtle)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4}}>Últimas tentativas</div>
                   {health.recent_attempts.map((a, i) => {
                     const s = OUTCOME_STYLE[a.outcome] || { color: 'var(--ma-fg-muted)', icon: 'warning', label: a.outcome };
                     return (

@@ -1,12 +1,5 @@
-/* global React, Icon, Button, IconButton, MarketplaceChip, MARKETPLACE_META */
-
-function inferMarketplace(url) {
-  if (!url) return null;
-  if (url.includes('mercadolivre') || url.includes('mercadolibre')) return 'mercadolivre';
-  if (url.includes('shopee')) return 'shopee';
-  if (url.includes('magazineluiza') || url.includes('magalu')) return 'magalu';
-  return null;
-}
+/* global React, Icon, Button, IconButton, MarketplaceChip, inferMarketplace */
+// Modal de cadastro: envia POST e deixa a primeira coleta ocorrer em background.
 
 function AddProductModal({ open, onClose, onAdded }) {
   const [url, setUrl] = React.useState('');
@@ -17,6 +10,7 @@ function AddProductModal({ open, onClose, onAdded }) {
   if (!open) return null;
 
   const marketplace = inferMarketplace(url);
+  // Validacao visual acompanha o suporte oficial: hoje apenas Mercado Livre.
   const supported = !!marketplace;
   const urlEntered = url.trim().length > 0;
 
@@ -24,12 +18,14 @@ function AddProductModal({ open, onClose, onAdded }) {
     if (!url.trim()) { setErr('Insira a URL do produto.'); return; }
     setSaving(true); setErr(null);
     try {
+      // A API responde rapido e agenda a coleta; a UI recarrega depois via onAdded.
       const r = await fetch('/api/v1/monitored/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: url.trim(), name: name.trim() || null }),
       });
       if (!r.ok) {
+        // FastAPI pode retornar detail como string ou objeto; manter leitura defensiva.
         const j = await r.json().catch(() => ({}));
         const detail = j?.detail;
         const msg = (detail && typeof detail === 'object' ? detail.message : detail) || `Erro ${r.status}`;
@@ -71,7 +67,7 @@ function AddProductModal({ open, onClose, onAdded }) {
                 autoFocus
               />
             </div>
-            <div className="ma-field-hint">Marketplaces suportados: Mercado Livre, Shopee, Magalu.</div>
+            <div className="ma-field-hint">Marketplace oficialmente suportado: Mercado Livre.</div>
           </div>
 
           {urlEntered && supported && (
@@ -100,7 +96,7 @@ function AddProductModal({ open, onClose, onAdded }) {
               <div style={{display:'flex', alignItems:'flex-start', gap: 12}}>
                 <Icon name="warning" size={20} color="var(--ma-danger)" style={{marginTop: 2}}/>
                 <div style={{flex: 1, fontSize: 13, color: 'var(--ma-fg)', lineHeight: 1.5}}>
-                  <b style={{color: 'var(--ma-fg-strong)'}}>Marketplace não suportado.</b> O <span style={{fontFamily: 'var(--ma-font-mono)'}}>market_scraper</span> só consegue ler URLs de Mercado Livre, Shopee e Magalu. O produto será cadastrado com status <span style={{fontFamily:'var(--ma-font-mono)', color: 'var(--ma-fg-strong)'}}>unsupported</span>.
+                  <b style={{color: 'var(--ma-fg-strong)'}}>Marketplace não suportado.</b> O <span style={{fontFamily: 'var(--ma-font-mono)'}}>market_scraper</span> oficialmente validado lê URLs de Mercado Livre. O produto será cadastrado com status <span style={{fontFamily:'var(--ma-font-mono)', color: 'var(--ma-fg-strong)'}}>unsupported</span>.
                 </div>
               </div>
             </div>

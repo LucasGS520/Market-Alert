@@ -1,4 +1,6 @@
 /* global React, ReactDOM, Sidebar, TopBar, Painel, Monitors, Alerts, ProductDetail, NotificationsPanel, AddProductModal, Icon */
+// Orquestrador da UI estatica: mantem navegacao, modais e dados em memoria.
+// Consumido diretamente pelo bootstrap em index.html depois de todos os globais.
 
 function LoadingScreen() {
   return (
@@ -31,12 +33,13 @@ function App() {
 
   React.useEffect(() => {
     loadDashboard();
-    // Auto-refresh every 30 seconds
+    // Auto-refresh leve: a API continua sendo a fonte de verdade; a UI apenas reconsulta.
     const interval = setInterval(loadDashboard, 30000);
     return () => clearInterval(interval);
   }, [loadDashboard]);
 
   const navTo = (s) => { setScreen(s); setOpenProductId(null); setProductDetail(null); };
+  // Navegacao global usada por componentes carregados sem import/export.
   window.MA_NAV = navTo;
 
   const openProduct = React.useCallback(async (id) => {
@@ -61,6 +64,7 @@ function App() {
   const urgentCount = data.products.filter(p => p.latest_comparison?.status === 'urgent').length;
 
   const screenLabel =
+    // Marcador auxiliar de tela para CSS/debug, sem participar da regra de negocio.
     openProductId ? '04 Product detail'
     : screen === 'dashboard' ? '01 Painel'
     : screen === 'monitors' ? '02 Monitoramento'

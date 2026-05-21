@@ -1,4 +1,5 @@
 /* global React, Icon, IconButton, Button, EVENT_META, DeliveryPill */
+// Drawer resumido de notificacoes; os dados ja foram carregados pelo App.
 
 function DrawerNotification({ n, onOpen }) {
   const meta = EVENT_META[n.event_type] || { label: n.event_type, icon: 'bell', tone: 'brand' };

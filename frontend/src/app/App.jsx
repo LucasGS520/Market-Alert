@@ -84,7 +84,6 @@ function App() {
       <div className="ma-main">
         <TopBar
           openNotifications={() => setNotifOpen(true)}
-          openAddProduct={() => setAddOpen(true)}
           alertsCount={urgentCount}/>
         <main className="ma-content">
           {openProductId && (

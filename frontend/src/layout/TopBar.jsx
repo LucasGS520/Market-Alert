@@ -1,7 +1,7 @@
 /* global React, Icon, IconButton */
 // Barra superior recebe callbacks do App para abrir overlays e manter a UI desacoplada.
 
-function TopBar({ openNotifications, openAddProduct, alertsCount }) {
+function TopBar({ openNotifications, alertsCount }) {
   return (
     <header className="ma-topbar">
       <div className="ma-search">
@@ -10,9 +10,6 @@ function TopBar({ openNotifications, openAddProduct, alertsCount }) {
         <span style={{marginLeft: 'auto', fontFamily: 'var(--ma-font-mono)', fontSize: 10, color: 'var(--ma-fg-subtle)', border: '1px solid var(--ma-border)', padding: '1px 6px', borderRadius: 4}}>⌘K</span>
       </div>
       <div className="ma-spacer"/>
-      <button className="ma-btn ma-btn-primary ma-btn-sm" onClick={openAddProduct}>
-        <Icon name="plus" size={12}/><span>Adicionar produto</span>
-      </button>
       <div style={{position:'relative'}}>
         <IconButton name="bell" onClick={openNotifications} title="Alertas"/>
         {alertsCount > 0 && (

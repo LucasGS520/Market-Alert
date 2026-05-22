@@ -91,13 +91,6 @@ infra/         → config, database, clients externos (scraper, ntfy)
 - `NOTIFICATION_COOLDOWN_MINUTES` — cooldown entre alertas do mesmo produto
 - `DOMAIN_CAPTCHA_COOLDOWN_SECONDS` — cooldown após CAPTCHA detectado pelo scraper
 
-### Governança documental
-A fonte de verdade para decisões arquiteturais, contratos e operação está em `docs/`:
-- `docs/architecture/adr/` — decisões arquiteturais (ADRs 0001–0005)
-- `docs/contracts/` — contratos versionáveis (API v1, scraper, workers, estado, notificações)
-- `docs/operations/runbook.md` — diagnóstico de coleta, comparação e ausência de notificação
-- `docs/architecture/glossary.md` — nomes canônicos de entidades, estados e eventos
-
 ---
 
 ## Regras Obrigatórias de Contexto (NÃO IGNORAR)

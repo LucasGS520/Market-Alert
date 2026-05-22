@@ -1,4 +1,4 @@
-/* global React, ReactDOM, Sidebar, TopBar, Painel, Monitors, Alerts, ProductDetail, NotificationsPanel, AddProductModal, Icon */
+/* global React, ReactDOM, Sidebar, TopBar, Painel, Monitors, Alerts, ProductDetail, NotificationsPanel, AddProductModal, SearchModal, Icon */
 // Orquestrador da UI estatica: mantem navegacao, modais e dados em memoria.
 // Consumido diretamente pelo bootstrap em index.html depois de todos os globais.
 
@@ -18,6 +18,7 @@ function App() {
   const [loadingDetail, setLoadingDetail] = React.useState(false);
   const [notifOpen, setNotifOpen] = React.useState(false);
   const [addOpen, setAddOpen] = React.useState(false);
+  const [searchOpen, setSearchOpen] = React.useState(false);
 
   const [data, setData] = React.useState({ products: [], notifications: [], loaded: false });
 
@@ -84,7 +85,7 @@ function App() {
       <div className="ma-main">
         <TopBar
           openNotifications={() => setNotifOpen(true)}
-          openAddProduct={() => setAddOpen(true)}
+          openSearch={() => setSearchOpen(true)}
           alertsCount={urgentCount}/>
         <main className="ma-content">
           {openProductId && (
@@ -136,6 +137,12 @@ function App() {
         open={addOpen}
         onClose={() => setAddOpen(false)}
         onAdded={loadDashboard}/>
+      <SearchModal
+        open={searchOpen}
+        onClose={() => setSearchOpen(false)}
+        onOpen={(id) => { setSearchOpen(false); openProduct(id); }}
+        onAdd={() => { setSearchOpen(false); setAddOpen(true); }}
+        products={data.products}/>
     </div>
   );
 }

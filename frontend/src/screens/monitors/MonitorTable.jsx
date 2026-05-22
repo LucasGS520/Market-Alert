@@ -17,7 +17,7 @@ function MonitorTable({ products, onOpen, filter, hideHead = false }) {
           <tr>
             <th style={{width: '36%'}}>Produto</th>
             <th>Status</th>
-            <th>Tend. 7d</th>
+            <th>Tendência</th>
             <th style={{textAlign:'right'}}>Preço atual</th>
             <th style={{textAlign:'right'}}>Variação 24h</th>
             <th style={{textAlign:'right'}}>Posição</th>
@@ -57,7 +57,7 @@ function MonitorTable({ products, onOpen, filter, hideHead = false }) {
                 <Sparkline data={p.history} color={varColor}/>
               </td>
               <td className="num">
-                <div style={{color: p.is_price_stale ? 'var(--ma-fg-muted)' : 'var(--ma-fg-strong)', fontWeight: 600, display:'flex', alignItems:'center', gap: 5}}>
+                <div style={{color: p.is_price_stale ? 'var(--ma-fg-muted)' : 'var(--ma-fg-strong)', fontWeight: 600, display:'flex', alignItems:'center', justifyContent:'flex-end', gap: 5}}>
                   {brl(p.current_price)}
                   {p.is_price_stale && <Icon name="warning" size={11} color="var(--ma-danger)" title="Preço obsoleto - última coleta falhou"/>}
                 </div>

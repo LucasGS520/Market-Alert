@@ -1,14 +1,12 @@
 ﻿/* global React, Icon, Button, IconButton, VariationBadge, Card, Tag, StatusDot, ComparisonBadge, MarketplaceChip, PriceChart, CollectionDiagnostic, AddCompetitorInline, brl */
 // Tela de detalhe: combina estado duravel do produto, comparacao e diagnostico operacional.
 const NEXT_CHECK_REASON_LABEL = {
-  // Labels de motivos de agendamento calculados pelo backend.
-  price_changed:        'preço variou — frequência aumentada',
-  recurring:            'ciclo automático regular',
-  stable_backoff:       'preço estável — frequência reduzida',
-  retry_backoff:        'retry após falha de coleta',
-  manual:               'enfileirado manualmente',
-  domain_blocked:       'domínio bloqueado — aguardando cooldown',
-  domain_circuit_open:  'domínio bloqueado — circuito aberto',
+  success_price_changed:   'preço variou — frequência aumentada',
+  success_price_unchanged: 'preço sem variação — intervalo regular',
+  error_backoff:           'retry após falha de coleta',
+  unavailable:             'produto indisponível — aguardando retomada',
+  unsupported:             'marketplace sem suporte de coleta',
+  initial:                 'primeiro agendamento',
 };
 
 const STABILITY_LABEL = {

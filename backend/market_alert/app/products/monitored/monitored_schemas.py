@@ -33,6 +33,7 @@ class MonitoredProductRead(BaseModel):
     collection_lease_until: datetime | None
     consecutive_failures: int
     check_interval_minutes: int
+    stability_level: str
     created_at: datetime
 
     @computed_field

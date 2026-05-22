@@ -29,11 +29,19 @@ async function enrichWithHistory(product) {
 
     const latestThumb = [...history].reverse().find(h => h.thumbnail_url);
 
+    const first = prices[0]?.price;
+    const last  = prices[prices.length - 1]?.price;
+    const variation_all = (first != null && first > 0 && last != null)
+      ? ((last - first) / first) * 100
+      : null;
+
     return {
       ...product,
       current_price: current ?? product.current_price,
       previous_price: prev24h,
       variation_24h: variation24h,
+      variation_all,
+      last_history_ts: prices.length > 0 ? prices[prices.length - 1].ts : null,
       history: prices.slice(-30).map(h => h.price),
       thumbnail_url: latestThumb ? latestThumb.thumbnail_url : (product.thumbnail_url ?? null),
     };
@@ -117,6 +125,17 @@ const MA_API = {
       competitors: enrichedCompetitors,
       competitors_count: competitorCount,
     };
+  },
+
+  async search(q) {
+    if (!q || q.trim().length < 2) return [];
+    try {
+      const r = await fetch(`${API}/monitored/search?q=${encodeURIComponent(q.trim())}`);
+      if (!r.ok) return [];
+      return r.json();
+    } catch {
+      return [];
+    }
   },
 };
 

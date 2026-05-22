@@ -12,8 +12,9 @@ function KpiCard({ label, value, sub, accent }) {
 }
 
 function TopMoverCard({ product, onOpen }) {
-  // O ranking exibido aqui e um resumo do snapshot competitivo mais recente.
-  const up = (product.variation_24h || 0) > 0.1;
+  // variation_all é a tendência acumulada; variation_24h é o detalhe recente.
+  const primaryVar = product.variation_all ?? product.variation_24h ?? 0;
+  const up = primaryVar > 0.1;
   return (
     <button
       onClick={() => onOpen(product.id)}
@@ -33,11 +34,11 @@ function TopMoverCard({ product, onOpen }) {
       <div style={{display:'flex', alignItems:'flex-end', justifyContent:'space-between', gap: 10}}>
         <div style={{minWidth: 0}}>
           <div style={{fontFamily:'var(--ma-font-display)', fontSize: 22, fontWeight: 800, color: 'var(--ma-fg-strong)', fontVariantNumeric:'tabular-nums', letterSpacing:'-0.02em', whiteSpace:'nowrap'}}>{brl(product.current_price)}</div>
-          <div style={{marginTop: 6, display:'flex', alignItems:'center', gap: 6}}>
-            <VariationBadge value={product.variation_24h}/>
-            {product.latest_comparison && (
-              <span style={{fontSize: 11, color: 'var(--ma-fg-subtle)', fontFamily: 'var(--ma-font-mono)'}}>
-                #{product.latest_comparison.ranking}/{product.latest_comparison.participants_count || '?'}
+          <div style={{marginTop: 6, display:'flex', alignItems:'center', gap: 6, flexWrap:'wrap'}}>
+            <VariationBadge value={product.variation_all ?? product.variation_24h}/>
+            {product.variation_all != null && product.variation_24h != null && (
+              <span style={{fontSize: 11, color: 'var(--ma-fg-subtle)', fontFamily: 'var(--ma-font-mono)', whiteSpace:'nowrap'}}>
+                24h {product.variation_24h > 0 ? '+' : ''}{product.variation_24h.toFixed(1)}%
               </span>
             )}
           </div>

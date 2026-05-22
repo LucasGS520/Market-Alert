@@ -1,4 +1,4 @@
-﻿/* global React, Icon */
+﻿/* global React, Icon, relativeTime */
 // Diagnostico operacional de coleta. Le o endpoint health sob demanda ao abrir.
 const OUTCOME_STYLE = {
   // Traducao visual de outcomes tecnicos recentes reportados pelo backend.
@@ -33,9 +33,6 @@ function CollectionDiagnostic({ productId }) {
     setOpen(o => !o);
   };
 
-  const circuitOpen = health && health.circuit_state === 'OPEN';
-  // Circuit breaker aberto explica ausencia temporaria de novas coletas.
-
   return (
     <div style={{marginTop: 12, borderRadius: 10, border: '1px solid var(--ma-neutral-600)', overflow: 'hidden'}}>
       <button
@@ -49,16 +46,6 @@ function CollectionDiagnostic({ productId }) {
       >
         <Icon name="zap" size={12} color="var(--ma-fg-muted)"/>
         <span style={{flex: 1, textAlign: 'left'}}>Diagnóstico de Coleta</span>
-        {health && circuitOpen && (
-          <span style={{fontSize: 10, padding: '2px 8px', borderRadius: 4, background: 'var(--ma-danger)', color: '#fff', fontWeight: 800}}>
-            CIRCUIT OPEN · {health.circuit_cooldown_seconds}s
-          </span>
-        )}
-        {health && !circuitOpen && (
-          <span style={{fontSize: 10, padding: '2px 8px', borderRadius: 4, background: 'var(--ma-success)', color: '#fff', fontWeight: 800}}>
-            CIRCUIT CLOSED
-          </span>
-        )}
         <Icon name={open ? 'chevron-up' : 'chevron-down'} size={12} color="var(--ma-fg-muted)"/>
       </button>
 
@@ -74,7 +61,12 @@ function CollectionDiagnostic({ productId }) {
                 </div>
                 <div>
                   <div style={{fontSize: 10, color: 'var(--ma-fg-subtle)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2}}>Última coleta bem-sucedida</div>
-                  <div style={{fontFamily: 'var(--ma-font-mono)', fontSize: 12, color: 'var(--ma-fg)'}}>{health.last_successful_collection_at || '—'}</div>
+                  <div
+                    style={{fontFamily: 'var(--ma-font-mono)', fontSize: 12, color: 'var(--ma-fg)'}}
+                    title={health.last_successful_collection_at ? new Date(health.last_successful_collection_at).toLocaleString('pt-BR') : undefined}
+                  >
+                    {relativeTime(health.last_successful_collection_at) || '—'}
+                  </div>
                 </div>
               </div>
               {health.recent_attempts.length > 0 ? (
@@ -86,7 +78,12 @@ function CollectionDiagnostic({ productId }) {
                       <div key={i} style={{display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', borderTop: i > 0 ? '1px solid var(--ma-neutral-600)' : 'none'}}>
                         <Icon name={s.icon} size={12} color={s.color}/>
                         <span style={{fontFamily: 'var(--ma-font-mono)', fontSize: 11, color: s.color, minWidth: 140}}>{s.label}</span>
-                        <span style={{fontFamily: 'var(--ma-font-mono)', fontSize: 10, color: 'var(--ma-fg-subtle)'}}>{a.ts}</span>
+                        <span
+                          style={{fontFamily: 'var(--ma-font-mono)', fontSize: 10, color: 'var(--ma-fg-subtle)'}}
+                          title={a.ts ? new Date(a.ts).toLocaleString('pt-BR') : undefined}
+                        >
+                          {relativeTime(a.ts) || a.ts}
+                        </span>
                       </div>
                     );
                   })}

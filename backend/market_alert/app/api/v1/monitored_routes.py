@@ -25,7 +25,8 @@ from app.products.monitored.monitored_service import (
     resume_product,
 )
 from app.utils.url_utils import get_url_rejection_reason, is_valid_product_url, normalize_url
-from app.api.v1.schemas import CreatedWithTask
+from app.api.v1.schemas import CreatedWithTask, SearchResult
+from app.products.competitor.competitor_model import Competitor
 from app.scheduling.scheduler_service import enqueue_with_lease
 from app.workers.redis import (
     get_collection_attempts,
@@ -68,6 +69,64 @@ async def list_monitored(session: Session):
         item.competitors_count = count
         result.append(item)
     return result
+
+
+@router.get("/search", response_model=list[SearchResult])
+async def search_monitored(q: str, session: Session) -> list[SearchResult]:
+    """Busca produtos monitorados e concorrentes por nome ou URL (mínimo 2 caracteres)."""
+    from sqlalchemy import or_
+
+    term = q.strip()
+    if len(term) < 2:
+        return []
+
+    pattern = f"%{term}%"
+
+    products_q = await session.execute(
+        select(MonitoredProduct)
+        .where(or_(
+            MonitoredProduct.name.ilike(pattern),
+            MonitoredProduct.url_normalized.ilike(pattern),
+        ))
+        .limit(5)
+    )
+    products = list(products_q.scalars().all())
+
+    competitors_q = await session.execute(
+        select(Competitor, MonitoredProduct)
+        .join(MonitoredProduct, Competitor.monitored_id == MonitoredProduct.id)
+        .where(or_(
+            Competitor.name.ilike(pattern),
+            Competitor.url_normalized.ilike(pattern),
+        ))
+        .limit(5)
+    )
+    competitors = list(competitors_q.all())
+
+    results: list[SearchResult] = []
+    for p in products:
+        results.append(SearchResult(
+            type="product",
+            id=p.id,
+            monitored_id=p.id,
+            name=p.name,
+            url_normalized=p.url_normalized,
+            status=p.status,
+            current_price=p.current_price,
+        ))
+    for comp, parent in competitors:
+        results.append(SearchResult(
+            type="competitor",
+            id=comp.id,
+            monitored_id=comp.monitored_id,
+            name=comp.name,
+            url_normalized=comp.url_normalized,
+            status=comp.status,
+            current_price=comp.current_price,
+            parent_name=parent.name,
+        ))
+
+    return results[:10]
 
 
 @router.get("/{product_id}", response_model=MonitoredProductDetail)

@@ -92,6 +92,8 @@ button { font-family: inherit; }
   color: var(--ma-fg-muted);
   font-size: 13px;
 }
+.ma-topbar .ma-search--btn { cursor: pointer; text-align: left; appearance: none; }
+.ma-topbar .ma-search--btn:hover { background: var(--ma-neutral-700); border-color: var(--ma-border-strong); }
 .ma-topbar .ma-spacer { flex: 1; }
 .ma-topbar .ma-avatar {
   width: 32px; height: 32px; border-radius: 50%;

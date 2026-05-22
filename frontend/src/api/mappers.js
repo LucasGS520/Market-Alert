@@ -20,6 +20,7 @@ function mapProduct(p) {
     next_check_at: relativeTime(p.next_check_at),
     next_check_reason: p.next_check_reason,
     last_checked_at: relativeTime(p.last_checked_at),
+    last_successful_collection_at_raw: p.last_successful_collection_at || null,
     consecutive_failures: p.consecutive_failures,
     icon: inferIcon(p.name),
     history: [],

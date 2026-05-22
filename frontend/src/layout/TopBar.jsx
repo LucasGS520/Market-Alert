@@ -1,14 +1,25 @@
 /* global React, Icon, IconButton */
 // Barra superior recebe callbacks do App para abrir overlays e manter a UI desacoplada.
 
-function TopBar({ openNotifications, alertsCount }) {
+function TopBar({ openNotifications, openSearch, alertsCount }) {
+  React.useEffect(() => {
+    const handler = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        openSearch && openSearch();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [openSearch]);
+
   return (
     <header className="ma-topbar">
-      <div className="ma-search">
+      <button className="ma-search ma-search--btn" onClick={openSearch} type="button">
         <Icon name="search" size={14}/>
         <span>Buscar produto, concorrente ou URL...</span>
         <span style={{marginLeft: 'auto', fontFamily: 'var(--ma-font-mono)', fontSize: 10, color: 'var(--ma-fg-subtle)', border: '1px solid var(--ma-border)', padding: '1px 6px', borderRadius: 4}}>⌘K</span>
-      </div>
+      </button>
       <div className="ma-spacer"/>
       <div style={{position:'relative'}}>
         <IconButton name="bell" onClick={openNotifications} title="Alertas"/>

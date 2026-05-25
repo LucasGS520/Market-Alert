@@ -67,16 +67,13 @@ function MarketplaceChip({ marketplace, size = 'md' }) {
 
 const EVENT_META = {
   // Metadados visuais para event_type vindo de NotificationLog.
-  price_drop:             { label: 'Queda de preço',          icon: 'trend-down', tone: 'success' },
-  price_rise:             { label: 'Alta de preço',           icon: 'trend-up',   tone: 'danger'  },
-  status_change:          { label: 'Mudança de status',       icon: 'warning',    tone: 'warning' },
-  ranking_change:         { label: 'Mudança de ranking',      icon: 'target',     tone: 'brand'   },
-  product_unavailable:    { label: 'Produto indisponível',    icon: 'eye',        tone: 'warning' },
-  product_available:      { label: 'Produto disponível',      icon: 'check',      tone: 'success' },
-  market_price_drop:      { label: 'Mercado em queda',        icon: 'trend-down', tone: 'success' },
-  market_price_rise:      { label: 'Mercado em alta',         icon: 'trend-up',   tone: 'danger'  },
-  competitor_unavailable: { label: 'Concorrente indisponível',icon: 'eye',        tone: 'warning' },
-  competitor_available:   { label: 'Novo concorrente',        icon: 'sparkles',   tone: 'info'    },
+  // Chaves correspondem aos alert_type reais do backend (notifications_service.py).
+  price_drop_alert:           { label: 'Queda de preço',       icon: 'trend-down', tone: 'success' },
+  price_rise_alert:           { label: 'Alta de preço',        icon: 'trend-up',   tone: 'danger'  },
+  competitive_position_alert: { label: 'Posição competitiva',  icon: 'target',     tone: 'brand'   },
+  market_alert:               { label: 'Variação de mercado',  icon: 'trend-down', tone: 'info'    },
+  availability_alert:         { label: 'Disponibilidade',      icon: 'eye',        tone: 'warning' },
+  error_alert:                { label: 'Problema de coleta',   icon: 'warning',    tone: 'warning' },
 };
 
 const DELIVERY_META = {

@@ -10,16 +10,18 @@ Eventos que podem gerar notificacao:
 
 - `price_drop_alert`: preco do produto monitorado caiu pelo menos `NOTIFICATION_DELTA_PERCENT`.
 - `price_rise_alert`: preco do produto monitorado subiu pelo menos `NOTIFICATION_DELTA_PERCENT`.
-- `competitive_position_alert`: houve mudanca competitiva relevante de status, ranking ou menor preco de mercado.
-- `availability_alert`: produto monitorado mudou de disponivel para indisponivel ou vice-versa.
+- `competitive_position_alert`: mudanca de status competitivo ou ranking da oferta de referencia. Exige `reference_available == True`.
+- `market_alert`: menor preco de mercado variou acima do threshold, sem sinal da oferta de referencia. Pode ocorrer mesmo quando a referencia esta indisponivel.
+- `availability_alert`: produto monitorado mudou de disponivel para indisponivel ou vice-versa. Disparado pelo `collector_task`, independente do pipeline de comparacao.
 
-Prioridade de consolidacao:
+Prioridade de consolidacao por comparacao (no maximo um alerta):
 
-1. Queda de preco.
-2. Alta de preco.
-3. Posicao competitiva.
+1. Queda de preco (`price_drop_alert`).
+2. Alta de preco (`price_rise_alert`).
+3. Posicao competitiva (`competitive_position_alert`).
+4. Variacao de mercado (`market_alert`).
 
-Uma comparacao gera no maximo um alerta consolidado.
+Uma comparacao gera no maximo um alerta consolidado. `availability_alert` e independente e nao participa desta consolidacao.
 
 ## Quando nao gera alerta
 

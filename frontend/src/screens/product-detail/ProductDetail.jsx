@@ -121,96 +121,126 @@ function ProductDetail({ product, onBack, onRefresh }) {
         </div>
       )}
 
-      {/* Chart + Market comparison */}
-      <div style={{display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 16}}>
-        <div className="ma-chart">
-          <div className="ma-chart-head">
-            <div className="left">
-              <div className="label">
-                {product.is_price_stale ? 'Último preço válido · seu produto' : 'Preço atual · seu produto'}
+      {/* Chart + Market comparison — produto estreito à esquerda, mercado largo à direita */}
+      <div style={{display: 'grid', gridTemplateColumns: '1fr 1.6fr', gap: 16}}>
+
+        {/* ESQUERDA (estreito): Seu produto — preço, variações, posição, ajuste */}
+        <Card>
+          <div className="ma-eyebrow">Seu produto</div>
+          <div style={{marginTop: 10}}>
+            <div style={{fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: product.is_price_stale ? 'var(--ma-fg-muted)' : 'var(--ma-fg-subtle)'}}>
+              {product.is_price_stale ? 'Último preço válido' : 'Preço atual'}
+            </div>
+            <div style={{fontFamily: 'var(--ma-font-display)', fontSize: 32, fontWeight: 800, letterSpacing: '-0.02em', color: product.is_price_stale ? 'var(--ma-fg-muted)' : 'var(--ma-fg-strong)', marginTop: 2}}>
+              {brl(product.current_price)}
+            </div>
+            {product.is_price_stale && (
+              <div style={{fontSize: 11, color: 'var(--ma-danger)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 4}}>
+                <Icon name="warning" size={11}/>
+                dado obsoleto · coletado em {product.last_successful_collection_at || product.last_checked_at || '—'}
               </div>
-              <div className="value" style={product.is_price_stale ? {color: 'var(--ma-fg-muted)'} : {}}>
-                {brl(product.current_price)}
-              </div>
-              {product.is_price_stale && (
-                <div style={{fontSize: 11, color: 'var(--ma-danger)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 2}}>
-                  <Icon name="warning" size={11}/>
-                  dado obsoleto · coletado em {product.last_successful_collection_at || product.last_checked_at || '—'}
+            )}
+            {!product.is_price_stale && (
+              <div style={{marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4}}>
+                <div style={{display: 'flex', alignItems: 'center', gap: 6, fontSize: 12}}>
+                  <VariationBadge value={product.variation_24h}/>
+                  {product.previous_price != null && (
+                    <span style={{color: 'var(--ma-fg-muted)'}}>vs. <span style={{fontFamily: 'var(--ma-font-mono)'}}>{brl(product.previous_price)}</span> (24h)</span>
+                  )}
                 </div>
-              )}
-              <div className="delta">
-                {!product.is_price_stale && <VariationBadge value={product.variation_24h}/>}
-                {product.previous_price != null && !product.is_price_stale && (
-                  <span>vs. <span style={{fontFamily: 'var(--ma-font-mono)'}}>{brl(product.previous_price)}</span> (24h)</span>
+                {product.variation_all != null && (
+                  <div style={{display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--ma-fg-muted)'}}>
+                    <VariationBadge value={product.variation_all}/>
+                    <span>desde o início</span>
+                  </div>
                 )}
               </div>
-            </div>
-            <div className="right">
-              {['7', '30', '90'].map(r => (
-                <button key={r} className={`ma-chip ${range === r ? 'is-active' : ''}`} onClick={() => setRange(r)}>{r} dias</button>
-              ))}
-            </div>
+            )}
           </div>
-          <PriceChart data={product.history}/>
-        </div>
+          {cmp && (
+            <>
+              <div className="ma-divider"/>
+              {(() => {
+                // Ranking só é exibido quando a referência participou do snapshot
+                // e a rodada teve concorrentes válidos suficientes.
+                const rankingValido = cmp.reference_available !== false
+                  && cmp.ranking != null
+                  && cmp.run_status !== 'no_competitors'
+                  && cmp.run_status !== 'expired'
+                  && (cmp.valid_competitors_count || 0) > 0;
+                return (
+                  <div>
+                    <div className="ma-kpi-label" style={{display:'flex', alignItems:'center', gap: 6}}>
+                      Sua posição
+                      {cmp.run_status === 'partial' && (
+                        <Tag tone="warning" size="xs">rodada parcial</Tag>
+                      )}
+                    </div>
+                    {rankingValido ? (
+                      <>
+                        <div className="ma-kpi-value" style={{fontSize: 28, color: cmp.ranking === 1 ? 'var(--ma-success)' : 'var(--ma-fg-strong)'}}>
+                          #{cmp.ranking}<span style={{fontSize: 14, color: 'var(--ma-fg-muted)', fontWeight: 500}}> de {cmp.participants_count || '?'}</span>
+                        </div>
+                        <div className="ma-kpi-sub">
+                          {cmp.ranking === 1
+                            ? 'menor preço do mercado'
+                            : `${cmp.ranking - 1} concorrente${cmp.ranking - 1 > 1 ? 's' : ''} mais barato${cmp.ranking - 1 > 1 ? 's' : ''}`}
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="ma-kpi-value" style={{fontSize: 28, color: 'var(--ma-fg-muted)'}}>— / —</div>
+                        <div className="ma-kpi-sub" style={{color: 'var(--ma-fg-subtle)'}}>
+                          {cmp.reference_available === false
+                            ? 'oferta de referência indisponível'
+                            : cmp.run_status === 'no_competitors'
+                            ? 'sem concorrentes na rodada'
+                            : 'dados insuficientes'}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })()}
+              {cmp.reference_available === false && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '8px 12px', marginTop: 10,
+                  background: 'rgba(255,196,0,0.07)',
+                  border: '1px solid rgba(255,196,0,0.18)',
+                  borderRadius: 'var(--ma-radius-sm)',
+                  fontSize: 11, color: 'var(--ma-fg-muted)',
+                }}>
+                  <Icon name="eye" size={12} color="var(--ma-warning)"/>
+                  Seu produto não participou desta rodada — mercado calculado com {cmp.valid_competitors_count || 0} concorrente(s)
+                </div>
+              )}
+              {cmp.potential_adjustment != null && (
+                <div style={{marginTop: 14, padding: 12, background: 'rgba(255,196,0,0.06)', borderRadius: 'var(--ma-radius-sm)', border: '1px solid rgba(255,196,0,0.18)'}}>
+                  <div className="ma-eyebrow" style={{color: 'var(--ma-brand-secondary)', marginBottom: 4}}>Ajuste sugerido</div>
+                  <div style={{fontSize: 13, color: 'var(--ma-fg)', lineHeight: 1.5}}>
+                    Reduzir <b style={{fontFamily:'var(--ma-font-mono)', color: 'var(--ma-brand-secondary)'}}>{brl(Math.abs(Number(cmp.potential_adjustment)))}</b> levaria você a <b style={{color: 'var(--ma-fg-strong)'}}>#{Math.max(1, cmp.ranking - 3)}</b>.
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </Card>
 
+        {/* DIREITA (largo): Mercado monitorado — métricas de mercado + gráfico */}
         <Card>
           <div className="ma-eyebrow">Mercado monitorado</div>
           {cmp ? (
             <>
-              <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 14}}>
-                {(() => {
-                  // Ranking só é exibido quando a referência participou do snapshot
-                  // e a rodada teve concorrentes válidos suficientes.
-                  const rankingValido = cmp.reference_available !== false
-                    && cmp.ranking != null
-                    && cmp.run_status !== 'no_competitors'
-                    && cmp.run_status !== 'expired'
-                    && (cmp.valid_competitors_count || 0) > 0;
-                  return (
-                    <div>
-                      <div className="ma-kpi-label" style={{display:'flex', alignItems:'center', gap: 6}}>
-                        Sua posição
-                        {cmp.run_status === 'partial' && (
-                          <Tag tone="warning" size="xs">rodada parcial</Tag>
-                        )}
-                      </div>
-                      {rankingValido ? (
-                        <>
-                          <div className="ma-kpi-value" style={{fontSize: 28, color: cmp.ranking === 1 ? 'var(--ma-success)' : 'var(--ma-fg-strong)'}}>
-                            #{cmp.ranking}<span style={{fontSize: 14, color: 'var(--ma-fg-muted)', fontWeight: 500}}> de {cmp.participants_count || '?'}</span>
-                          </div>
-                          <div className="ma-kpi-sub">
-                            {cmp.ranking === 1
-                              ? 'menor preço do mercado'
-                              : `${cmp.ranking - 1} concorrente${cmp.ranking - 1 > 1 ? 's' : ''} mais barato${cmp.ranking - 1 > 1 ? 's' : ''}`}
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <div className="ma-kpi-value" style={{fontSize: 28, color: 'var(--ma-fg-muted)'}}>— / —</div>
-                          <div className="ma-kpi-sub" style={{color: 'var(--ma-fg-subtle)'}}>
-                            {cmp.reference_available === false
-                              ? 'oferta de referência indisponível'
-                              : cmp.run_status === 'no_competitors'
-                              ? 'sem concorrentes na rodada'
-                              : 'dados insuficientes'}
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  );
-                })()}
-                <div>
-                  <div className="ma-kpi-label">Preço médio</div>
-                  <div className="ma-kpi-value" style={{fontSize: 28}}>{brl(cmp.average_price)}</div>
-                  <div className="ma-kpi-sub">
-                    {product.current_price != null && cmp.average_price != null && (
-                      product.current_price < cmp.average_price
-                        ? `você está ${((1 - product.current_price / cmp.average_price) * 100).toFixed(1).replace('.', ',')}% abaixo`
-                        : `você está ${((product.current_price / cmp.average_price - 1) * 100).toFixed(1).replace('.', ',')}% acima`
-                    )}
-                  </div>
+              <div style={{marginTop: 14}}>
+                <div className="ma-kpi-label">Preço médio de mercado</div>
+                <div className="ma-kpi-value" style={{fontSize: 28}}>{brl(cmp.average_price)}</div>
+                <div className="ma-kpi-sub">
+                  {product.current_price != null && cmp.average_price != null && (
+                    product.current_price < cmp.average_price
+                      ? `você está ${((1 - product.current_price / cmp.average_price) * 100).toFixed(1).replace('.', ',')}% abaixo`
+                      : `você está ${((product.current_price / cmp.average_price - 1) * 100).toFixed(1).replace('.', ',')}% acima`
+                  )}
                 </div>
               </div>
               <div className="ma-divider"/>
@@ -218,6 +248,9 @@ function ProductDetail({ product, onBack, onRefresh }) {
                 <div>
                   <span className="ma-meta">menor</span>
                   <div style={{fontFamily:'var(--ma-font-mono)', color:'var(--ma-success)', fontWeight: 600}}>{brl(cmp.min_price)}</div>
+                  {cmp.market_variation_24h != null && (
+                    <div style={{marginTop: 2}}><VariationBadge value={cmp.market_variation_24h}/></div>
+                  )}
                 </div>
                 <div>
                   <span className="ma-meta">maior</span>
@@ -228,21 +261,23 @@ function ProductDetail({ product, onBack, onRefresh }) {
                   <div style={{fontFamily:'var(--ma-font-mono)', color:'var(--ma-fg-strong)', fontWeight: 600, textTransform: 'lowercase'}}>{cmp.run_status || '—'} · {cmp.valid_competitors_count || 0}/{(cmp.participants_count || 1) - 1}</div>
                 </div>
               </div>
-              {cmp.potential_adjustment != null && (
-                <div style={{marginTop: 14, padding: 12, background: 'rgba(255,196,0,0.06)', borderRadius: 'var(--ma-radius-sm)', border: '1px solid rgba(255,196,0,0.18)'}}>
-                  <div className="ma-eyebrow" style={{color: 'var(--ma-brand-secondary)', marginBottom: 4}}>Ajuste sugerido</div>
-                  <div style={{fontSize: 13, color: 'var(--ma-fg)', lineHeight: 1.5}}>
-                    Reduzir <b style={{fontFamily:'var(--ma-font-mono)', color: 'var(--ma-brand-secondary)'}}>{brl(Math.abs(Number(cmp.potential_adjustment)))}</b> levaria você a <b style={{color: 'var(--ma-fg-strong)'}}>#{Math.max(1, cmp.ranking - 3)}</b>.
-                  </div>
-                </div>
-              )}
             </>
           ) : (
-            <div style={{padding: '24px 4px', textAlign: 'center', color: 'var(--ma-fg-muted)', fontSize: 12}}>
+            <div style={{padding: '16px 4px', textAlign: 'center', color: 'var(--ma-fg-muted)', fontSize: 12}}>
               <Icon name="warning" size={24} color="var(--ma-fg-subtle)"/>
               <div style={{marginTop: 8}}>Comparação ainda não calculada para este produto.</div>
             </div>
           )}
+          <div className="ma-divider"/>
+          <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom: 8}}>
+            <span style={{fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ma-fg-subtle)'}}>Evolução de preço</span>
+            <div style={{display:'flex', gap: 4}}>
+              {['7', '30', '90'].map(r => (
+                <button key={r} className={`ma-chip ${range === r ? 'is-active' : ''}`} onClick={() => setRange(r)}>{r} dias</button>
+              ))}
+            </div>
+          </div>
+          <PriceChart data={product.history}/>
         </Card>
       </div>
 
@@ -279,7 +314,12 @@ function ProductDetail({ product, onBack, onRefresh }) {
               const isBelow = diff < 0;
               return (
                 <div key={c.id} className="ma-comp-row ma-comp-row-detailed">
-                  <div className={`ma-comp-dot ${isBelow ? 'below' : 'above'}`}/>
+                  {c.thumbnail_url
+                    ? <img src={c.thumbnail_url} alt="" width={26} height={26}
+                           style={{borderRadius: 3, objectFit: 'cover', flexShrink: 0}}
+                           onError={e => { e.currentTarget.style.display = 'none'; }}/>
+                    : <div className={`ma-comp-dot ${isBelow ? 'below' : 'above'}`}/>
+                  }
                   <div style={{minWidth: 0}}>
                     <div style={{display:'flex', alignItems:'center', gap: 8, flexWrap:'wrap'}}>
                       <span className="ma-comp-name">{c.name || 'Concorrente'}</span>

@@ -35,12 +35,16 @@ function mapComparison(c) {
   if (!c) return null;
   return {
     id: c.id,
+    // Dados da oferta de referencia — condicionais (null quando reference_available == false)
+    reference_available: c.reference_available ?? null,
     status: c.status,
     ranking: c.ranking,
+    potential_adjustment: c.potential_adjustment != null ? Number(c.potential_adjustment) : null,
+    // Dados de mercado — sempre presentes quando ha ofertas validas
     average_price: Number(c.average_price),
     min_price: Number(c.min_price),
     max_price: Number(c.max_price),
-    potential_adjustment: c.potential_adjustment != null ? Number(c.potential_adjustment) : null,
+    market_variation_24h: c.market_variation_24h ?? null,
     run_status: c.run_status,
     participants_count: c.participants_count,
     valid_competitors_count: c.valid_competitors_count,
@@ -65,9 +69,7 @@ function mapCompetitor(c) {
 
 function mapNotification(n) {
   // Mantem a semantica do NotificationLog e adiciona apenas classificacao visual.
-  const meta = {
-    urgent: ['price_rise', 'ranking_change', 'market_price_rise'],
-  };
+  const urgentTypes = ['price_rise_alert', 'competitive_position_alert', 'market_alert'];
   return {
     id: n.id,
     monitored_id: n.monitored_id,
@@ -79,7 +81,7 @@ function mapNotification(n) {
     run_status: n.run_status,
     participants_count: n.participants_count,
     sent_at: relativeTime(n.sent_at),
-    kind: meta.urgent.includes(n.event_type) ? 'urgent' : 'info',
+    kind: urgentTypes.includes(n.event_type) ? 'urgent' : 'info',
   };
 }
 

@@ -22,6 +22,13 @@ from app.notifications.notifications_schemas import NotificationLogRead
 from app.notifications.notifications_service import get_notification, list_notifications
 
 EventType = Literal[
+    # Tipos ativos (alert_type consolidados pelo pipeline de comparação)
+    "price_drop_alert", "price_rise_alert",
+    "competitive_position_alert",
+    "market_alert",
+    "availability_alert",
+    "error_alert",
+    # Valores legados (linhas históricas no banco)
     "price_drop", "price_rise", "status_change", "ranking_change",
     "product_unavailable", "product_available",
     "market_price_drop", "market_price_rise",
@@ -49,9 +56,8 @@ async def list_notifications_endpoint(
     Lista tentativas de notificação com filtros opcionais.
 
     - **monitored_id**: filtra por produto monitorado.
-    - **event_type**: price_drop, price_rise, status_change, ranking_change,
-      product_unavailable, product_available, market_price_drop, market_price_rise,
-      competitor_unavailable, competitor_available.
+    - **event_type**: price_drop_alert, price_rise_alert, competitive_position_alert,
+      market_alert, availability_alert, error_alert (tipos ativos) ou valores legados.
     - **delivery_status**: pending, sent, failed ou skipped.
     - **competitor_id**: filtra eventos Tier 2 de um concorrente específico.
     - **from** / **to**: intervalo de data (ISO 8601).

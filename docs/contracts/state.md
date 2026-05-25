@@ -50,6 +50,50 @@ Nao usar Redis como unica fonte para:
 - Entrega de notificacao.
 - Estado de negocio que precise sobreviver a limpeza de Redis.
 
+## Dados de mercado vs. dados da referencia
+
+O modelo distingue dois planos de informacao dentro de um snapshot de comparacao:
+
+### Dados de mercado (sempre calculados quando ha ofertas validas)
+
+Persistidos em `comparisons`. Validos mesmo quando `reference_available == False`.
+
+| Campo | Significado |
+|---|---|
+| `min_price` | Menor preco entre todas as ofertas validas |
+| `max_price` | Maior preco entre todas as ofertas validas |
+| `average_price` | Media dos precos validos |
+| `participants_count` | Total de ofertas que entraram no calculo |
+| `valid_competitors_count` | Concorrentes validos na rodada |
+| `ignored_competitors_count` | Concorrentes ignorados (sem preco, inativos) |
+| `run_status` | Status da rodada de coleta coordenada |
+
+### Dados da oferta de referencia (condicionais)
+
+Presentes apenas quando `reference_available == True`. Ficam `NULL` quando a referencia esta indisponivel.
+
+| Campo | Significado |
+|---|---|
+| `status` | Status competitivo da referencia (`competitive`, `attention`, `urgent`) |
+| `ranking` | Posicao da referencia entre todas as ofertas |
+| `potential_adjustment` | Diferenca para igualar o menor preco |
+| `product_price` | Preco da referencia no momento do snapshot |
+
+### Campo de controle
+
+| Campo | Significado |
+|---|---|
+| `reference_available` | `True` se a oferta de referencia participou do snapshot |
+
+### Dados transientes (Redis)
+
+Estado operacional que nao precisa sobreviver reinicializacao:
+
+- Lease de coleta (`collection_lease_until`).
+- Rodada coordenada (`collection_run:{run_id}`).
+- Cooldown de notificacao.
+- Cache de comparacao.
+
 ## Criterio para novos dados
 
 Perguntas obrigatorias:

@@ -3,9 +3,10 @@
 Este README descreve o backend principal. A governanca oficial de arquitetura,
 contratos, decisoes e operacao fica no [README raiz](../README.md).
 
-`market_alert` é o módulo de negócio responsável por monitorar URLs de produtos,
-coletar preços via `market_scraper`, comparar o produto monitorado com seus
-concorrentes e disparar notificações quando houver variação relevante.
+`market_alert` é o módulo de negócio responsável por monitorar grupos de mercado,
+coletar preços via `market_scraper` e calcular snapshots de mercado para cada grupo.
+O produto monitorado é a âncora estrutural do grupo, mas o mercado é calculado e
+historizado mesmo quando essa oferta estiver indisponível.
 
 ## Arquitetura
 
@@ -35,23 +36,31 @@ Organização por fronteiras de domínio:
 ```
 POST /api/v1/monitored/  (status=pending, next_check_at=now)
   ↓
-collector_task(product_id)
+collection_orchestrator_task(product_id)
   ↓
-collect_product  →  market_scraper  →  PriceHistory + status=active
+  ├─ collect_product (oferta de referência) → market_scraper
+  │    falha → referencia indisponível, rodada continua
+  │    sucesso → PriceHistory + status=active
   ↓
-rodada coordenada criada (collection_run:{product_id})
+rodada coordenada criada (collection_run:{run_id})
   ↓
-collector_task(competitor_id, run_id=product_id)  ×N
+collector_task(competitor_id, run_id)  ×N
   ↓
-comparison_task(run_id=product_id)  — aguarda rodada concluir
+comparison_task(run_id)  — aguarda rodada concluir
   ↓
-calculate_comparison  →  snapshot competitivo
+calculate_comparison  →  snapshot de mercado
+    reference_available=True  → ranking + status + potential_adjustment calculados
+    reference_available=False → apenas min/max/avg/contadores
   ↓
-evaluate_and_send  →  ntfy / telert (se delta >= threshold e fora do cooldown)
+sinais → no máximo 1 alerta público por classe (referência ou mercado)
+  ↓
+notification_task  →  ntfy (se configurado, com quorum e fora do cooldown)
 ```
 
 O `scheduler_task` dispara a cada minuto pelo Celery Beat e reenfileira
-`collector_task(product_id)` para cada produto elegível com `next_check_at <= now`.
+`collection_orchestrator_task(product_id)` para cada produto elegível com
+`next_check_at <= now`. Produtos com status `unavailable` ou `error` continuam
+elegíveis — o scheduler não depende da saúde da oferta de referência.
 
 ---
 

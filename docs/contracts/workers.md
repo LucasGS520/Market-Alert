@@ -31,6 +31,22 @@ Contrato:
 - Concorrente em rodada marca estado no Redis como `done`, `failed`, `deferred` ou `skipped`.
 - Coleta autonoma de concorrente pode disparar `comparison_task`.
 
+## `collection_orchestrator_task`
+
+Assinatura:
+
+```python
+collection_orchestrator_task(product_id: str)
+```
+
+Contrato:
+
+- Tenta coletar a oferta de referencia via `collect_product`.
+- Falha na coleta da referencia **nao aborta** a rodada de mercado.
+- Aborta apenas em: produto inexistente, `paused`/`unsupported`, `ScraperUnavailableError`, ou `product_deleted`.
+- Quando a coleta da referencia falha (razao != `product_deleted`), prossegue para coletar concorrentes e enfileira `comparison_task`.
+- Libera `collection_lease_until` em todo desfecho nao-retryable.
+
 ## `comparison_task`
 
 Assinatura:
@@ -47,9 +63,13 @@ comparison_task(
 Contrato:
 
 - Com `run_id`, aguarda a rodada coordenada sair de `pending`.
-- Calcula snapshot competitivo via service de comparacao.
+- Calcula snapshot de mercado via `calculate_comparison`.
+- O snapshot e calculado com todas as ofertas validas, mesmo sem a referencia.
+- Quando `reference_available == False`, `ranking`, `status` e `potential_adjustment` ficam `None`.
 - Pode persistir comparacao sem notificar quando a rodada esta degradada.
-- Converte sinais tecnicos em no maximo um alerta publico.
+- Converte sinais tecnicos separados por classe em no maximo um alerta publico:
+  - Sinais da referencia → `competitive_position_alert`.
+  - Sinal de mercado puro → `market_alert`.
 
 ## `notification_task`
 
@@ -112,4 +132,8 @@ Estados finais:
 - `expired`
 - `no_competitors`
 
-`partial`, `expired` e `no_competitors` permitem auditoria, mas bloqueiam notificacao competitiva.
+`partial`, `expired` e `no_competitors` permitem auditoria, mas bloqueiam notificacao.
+
+Nota: falha na coleta da referencia nao produz estado degradado de rodada. O `run_status` reflete
+o estado da coleta dos **concorrentes**; a indisponibilidade da referencia e registrada separadamente
+em `reference_available`.

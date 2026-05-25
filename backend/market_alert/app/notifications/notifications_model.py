@@ -9,9 +9,10 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.infra.database import Base
 
 EventType = Enum(
-    # Novos alert types consolidados (uso ativo)
+    # Alert types consolidados (uso ativo)
     "price_drop_alert", "price_rise_alert",
-    "competitive_position_alert",
+    "competitive_position_alert",   # sinais da oferta de referência
+    "market_alert",                 # sinais de mercado independentes da referência
     "availability_alert",
     "error_alert",
     # Valores legados (mantidos para linhas históricas)

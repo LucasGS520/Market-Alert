@@ -19,6 +19,15 @@ button { font-family: inherit; }
   min-height: 100vh;
 }
 .ma-sidebar {
+  --ma-fg: #23242F;
+  --ma-fg-strong: #13141B;
+  --ma-fg-muted: #4F5260;
+  --ma-fg-subtle: #727684;
+  --ma-border: #E0E3EA;
+  --ma-border-strong: #C9CED8;
+  --ma-neutral-400: #E1E5ED;
+  --ma-neutral-500: #EEF1F6;
+  --ma-neutral-700: #F7F8FA;
   background: var(--ma-neutral-700);
   border-right: 1px solid var(--ma-border);
   padding: 22px 18px;
@@ -75,6 +84,15 @@ button { font-family: inherit; }
 
 .ma-main { display: flex; flex-direction: column; min-width: 0; }
 .ma-topbar {
+  --ma-fg: #23242F;
+  --ma-fg-strong: #13141B;
+  --ma-fg-muted: #4F5260;
+  --ma-fg-subtle: #727684;
+  --ma-border: #E0E3EA;
+  --ma-border-strong: #C9CED8;
+  --ma-neutral-500: #EEF1F6;
+  --ma-neutral-700: #F7F8FA;
+  --ma-neutral-900: #FFFFFF;
   height: 56px;
   border-bottom: 1px solid var(--ma-border);
   background: var(--ma-neutral-700);

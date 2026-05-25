@@ -72,7 +72,9 @@ function MonitorTable({ products, onOpen, filter, hideHead = false }) {
                 {!p.is_price_stale && <VariationBadge value={p.variation_24h}/>}
               </td>
               <td className="num">
-                {cmp && (cmp.valid_competitors_count || 0) > 0 && cmp.run_status !== 'no_competitors' && cmp.run_status !== 'expired'
+                {cmp && cmp.reference_available !== false && cmp.ranking != null
+                  && (cmp.valid_competitors_count || 0) > 0
+                  && cmp.run_status !== 'no_competitors' && cmp.run_status !== 'expired'
                   ? <span style={{fontFamily:'var(--ma-font-mono)', fontWeight: 700, color: cmp.ranking === 1 ? 'var(--ma-success)' : 'var(--ma-fg-strong)'}}>
                       #{cmp.ranking} <span style={{color:'var(--ma-fg-subtle)', fontWeight: 400}}>de {cmp.participants_count || '?'}</span>
                     </span>

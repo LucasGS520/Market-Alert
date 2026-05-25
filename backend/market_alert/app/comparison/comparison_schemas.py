@@ -13,8 +13,10 @@ class ComparisonRead(BaseModel):
 
     id: uuid.UUID
     monitored_id: uuid.UUID
-    status: str
-    ranking: int
+    # None quando a oferta de referência estava indisponível no snapshot.
+    status: str | None
+    ranking: int | None
+    reference_available: bool
     average_price: Decimal
     min_price: Decimal
     max_price: Decimal

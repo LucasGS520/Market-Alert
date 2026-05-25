@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, Numeric, String, func, text
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Index, Integer, Numeric, String, func, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -27,8 +27,12 @@ class Comparison(Base):
         UUID(as_uuid=True), ForeignKey("monitored_products.id", ondelete="CASCADE"), nullable=False
     )
 
-    status: Mapped[str] = mapped_column(ComparisonStatus, nullable=False)
-    ranking: Mapped[int] = mapped_column(Integer, nullable=False)
+    # Nullable quando a oferta de referência estiver indisponível no snapshot.
+    status: Mapped[str | None] = mapped_column(ComparisonStatus, nullable=True)
+    ranking: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    reference_available: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("true")
+    )
 
     average_price: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
     min_price: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)

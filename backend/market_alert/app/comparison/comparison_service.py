@@ -33,6 +33,7 @@ def _snapshot_identico(anterior: Comparison, novo: dict) -> bool:
 
     Inclui metadados de composição para evitar supressão quando o conjunto
     de concorrentes muda (participants_count, valid/ignored counts, run_status).
+    Compara reference_available para detectar mudança de disponibilidade da referência.
     """
     return (
         anterior.status == novo["status"]
@@ -52,6 +53,7 @@ def _snapshot_identico(anterior: Comparison, novo: dict) -> bool:
         and anterior.valid_competitors_count == novo["valid_competitors_count"]
         and anterior.ignored_competitors_count == novo["ignored_competitors_count"]
         and anterior.run_status == novo["run_status"]
+        and getattr(anterior, "reference_available", True) == novo["reference_available"]
     )
 
 
@@ -61,24 +63,26 @@ async def calculate_comparison(
     run_id: str | None = None,
     run_status: str | None = None,
 ) -> Comparison | None:
-    """Calcula e persiste um snapshot competitivo para o produto monitorado.
+    """Calcula e persiste um snapshot de mercado para o grupo monitorado.
 
-    Retorna None sem persistir se o produto principal for inelegível.
+    Aborta apenas quando não há âncora estrutural válida (produto inexistente ou
+    em paused/unsupported) ou quando zero ofertas têm preço válido.
+
+    Quando a oferta de referência estiver indisponível (sem preço, inativa ou
+    indisponível), o mercado ainda é calculado com os concorrentes válidos;
+    ranking, status e potential_adjustment ficam None nesse snapshot.
+
     Retorna None sem persistir se o snapshot for idêntico ao anterior dentro
     da janela de deduplicação.
     """
-    # ── 1. Validar produto principal ──────────────────────────────────────
+    # ── 1. Verificar âncora estrutural ────────────────────────────────────
     produto = await session.get(MonitoredProduct, monitored_id)
 
     if not produto:
         logger.warning("comparacao_abortada", produto_id=str(monitored_id), razao="produto_nao_encontrado")
         return None
 
-    if produto.current_price is None:
-        logger.warning("comparacao_abortada", produto_id=str(monitored_id), razao="produto_sem_preco")
-        return None
-
-    if produto.status != "active":
+    if produto.status in ("paused", "unsupported"):
         logger.info(
             "comparacao_abortada",
             produto_id=str(monitored_id),
@@ -87,11 +91,23 @@ async def calculate_comparison(
         )
         return None
 
-    if not produto.is_available:
-        logger.info("comparacao_abortada", produto_id=str(monitored_id), razao="produto_indisponivel")
-        return None
+    # ── 2. Determinar elegibilidade da oferta de referência ───────────────
+    reference_available = (
+        produto.status == "active"
+        and produto.is_available is True
+        and produto.current_price is not None
+    )
 
-    # ── 2. Buscar e classificar concorrentes ──────────────────────────────
+    if not reference_available:
+        logger.info(
+            "referencia_indisponivel",
+            produto_id=str(monitored_id),
+            status=produto.status,
+            is_available=produto.is_available,
+            current_price=str(produto.current_price) if produto.current_price is not None else None,
+        )
+
+    # ── 3. Buscar e classificar concorrentes ──────────────────────────────
     resultado = await session.execute(
         select(Competitor).where(Competitor.monitored_id == monitored_id)
     )
@@ -121,6 +137,11 @@ async def calculate_comparison(
     valid_competitors_count = len(elegíveis)
     ignored_competitors_count = len(ignorados)
 
+    # ── 4. Verificar se há ofertas suficientes para calcular o mercado ────
+    if not reference_available and valid_competitors_count == 0:
+        logger.warning("comparacao_abortada", produto_id=str(monitored_id), razao="sem_ofertas_validas")
+        return None
+
     # run_status: sem concorrentes válidos substitui qualquer estado da rodada
     if valid_competitors_count == 0:
         run_status_final = "no_competitors"
@@ -129,23 +150,36 @@ async def calculate_comparison(
     else:
         run_status_final = "manual"
 
-    # ── 3. Montar entradas para cálculo ───────────────────────────────────
-    # Tuplas (preco, indice_original) garantem tie-breaking determinístico
-    preco_produto = Decimal(str(produto.current_price))
-    entradas: list[tuple[Decimal, int]] = [(preco_produto, 0)]
+    # ── 5. Montar entradas para cálculo de mercado ────────────────────────
+    # Tuplas (preco, indice_original) garantem tie-breaking determinístico.
+    # Índice 0 reservado para a oferta de referência.
+    entradas: list[tuple[Decimal, int]] = []
+    preco_referencia: Decimal | None = None
+
+    if reference_available:
+        preco_referencia = Decimal(str(produto.current_price))
+        entradas.append((preco_referencia, 0))
+
     for i, c in enumerate(elegíveis, 1):
         entradas.append((Decimal(str(c.current_price)), i))
 
     entradas_ordenadas = sorted(entradas, key=lambda x: (x[0], x[1]))
     todos_precos = [p for p, _ in entradas_ordenadas]
 
-    ranking = next(i + 1 for i, (_, idx) in enumerate(entradas_ordenadas) if idx == 0)
     preco_medio = sum(todos_precos) / len(todos_precos)
     preco_minimo = todos_precos[0]
     preco_maximo = todos_precos[-1]
-    status = _calcular_status(preco_produto, preco_minimo)
-    ajuste_potencial = preco_produto - preco_minimo if preco_produto > preco_minimo else None
     participants_count = len(entradas)
+
+    # ── 6. Calcular posição da referência (somente se disponível) ─────────
+    if reference_available:
+        ranking = next(i + 1 for i, (_, idx) in enumerate(entradas_ordenadas) if idx == 0)
+        status = _calcular_status(preco_referencia, preco_minimo)
+        ajuste_potencial = preco_referencia - preco_minimo if preco_referencia > preco_minimo else None
+    else:
+        ranking = None
+        status = None
+        ajuste_potencial = None
 
     novo_snapshot = {
         "status": status,
@@ -158,6 +192,7 @@ async def calculate_comparison(
         "valid_competitors_count": valid_competitors_count,
         "ignored_competitors_count": ignored_competitors_count,
         "run_status": run_status_final,
+        "reference_available": reference_available,
     }
 
     # ── 4. Deduplicação ───────────────────────────────────────────────────
@@ -197,10 +232,11 @@ async def calculate_comparison(
         potential_adjustment=ajuste_potencial,
         run_id=run_id,
         run_status=run_status_final,
-        product_price=preco_produto,
+        product_price=preco_referencia,
         participants_count=participants_count,
         valid_competitors_count=valid_competitors_count,
         ignored_competitors_count=ignored_competitors_count,
+        reference_available=reference_available,
     )
     session.add(comparacao)
     await session.commit()
@@ -209,10 +245,11 @@ async def calculate_comparison(
     logger.info(
         "comparacao_calculada",
         produto_id=str(monitored_id),
+        reference_available=reference_available,
         status=status,
         ranking=ranking,
         preco_minimo=str(preco_minimo),
-        preco_produto=str(preco_produto),
+        preco_referencia=str(preco_referencia) if preco_referencia is not None else None,
         participants_count=participants_count,
         valid_competitors_count=valid_competitors_count,
         ignored_competitors_count=ignored_competitors_count,

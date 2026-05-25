@@ -155,13 +155,16 @@ function ProductDetail({ product, onBack, onRefresh }) {
         </div>
 
         <Card>
-          <div className="ma-eyebrow">Comparação com o mercado</div>
+          <div className="ma-eyebrow">Mercado monitorado</div>
           {cmp ? (
             <>
               <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 14}}>
                 {(() => {
-                  // Ranking so e confiavel quando a rodada teve concorrentes validos.
-                  const rankingValido = cmp.run_status !== 'no_competitors'
+                  // Ranking só é exibido quando a referência participou do snapshot
+                  // e a rodada teve concorrentes válidos suficientes.
+                  const rankingValido = cmp.reference_available !== false
+                    && cmp.ranking != null
+                    && cmp.run_status !== 'no_competitors'
                     && cmp.run_status !== 'expired'
                     && (cmp.valid_competitors_count || 0) > 0;
                   return (
@@ -187,7 +190,11 @@ function ProductDetail({ product, onBack, onRefresh }) {
                         <>
                           <div className="ma-kpi-value" style={{fontSize: 28, color: 'var(--ma-fg-muted)'}}>— / —</div>
                           <div className="ma-kpi-sub" style={{color: 'var(--ma-fg-subtle)'}}>
-                            {cmp.run_status === 'no_competitors' ? 'sem concorrentes na rodada' : 'dados insuficientes'}
+                            {cmp.reference_available === false
+                              ? 'oferta de referência indisponível'
+                              : cmp.run_status === 'no_competitors'
+                              ? 'sem concorrentes na rodada'
+                              : 'dados insuficientes'}
                           </div>
                         </>
                       )}

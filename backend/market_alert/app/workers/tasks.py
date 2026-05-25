@@ -28,6 +28,7 @@ Nota sobre async dentro do Celery:
 
 import time
 import uuid
+from datetime import datetime, timezone
 from decimal import Decimal
 
 import structlog
@@ -340,6 +341,10 @@ def comparison_task(
                             run_id=run_id,
                         )
                         return
+
+                    # Snapshot elegível para notificação: evento econômico confirmado
+                    produto.last_market_changed_at = datetime.now(timezone.utc)
+                    await session.commit()
 
                     preco_anterior = Decimal(old_price) if old_price else None
                     preco_novo = Decimal(new_price) if new_price else None

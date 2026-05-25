@@ -239,6 +239,7 @@ async def collect_product(
                     last_price_changed_at=product.last_price_changed_at,
                     last_availability_changed_at=product.last_availability_changed_at,
                     now=now,
+                    last_market_changed_at=product.last_market_changed_at,
                 )
                 product.stability_level = new_stability
                 next_dt, delay = compute_next_check(
@@ -350,6 +351,7 @@ async def collect_product(
                 last_price_changed_at=product.last_price_changed_at,
                 last_availability_changed_at=product.last_availability_changed_at,
                 now=now,
+                last_market_changed_at=product.last_market_changed_at,
             )
             product.stability_level = new_stability
             next_dt, delay = compute_next_check(
@@ -436,6 +438,7 @@ async def collect_product(
                 last_price_changed_at=product.last_price_changed_at,
                 last_availability_changed_at=product.last_availability_changed_at,
                 now=now,
+                last_market_changed_at=product.last_market_changed_at,
             )
             product.stability_level = new_stability
             next_dt, delay = compute_next_check(

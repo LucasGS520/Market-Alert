@@ -5,10 +5,18 @@ from urllib.parse import urlparse
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infra.database import get_session
-from app.comparison.comparison_schemas import ComparisonRead
+from app.comparison.comparison_schemas import CompetitorSummaryRead, MarketSnapshotRead
+from app.comparison.market_indicators_service import (
+    batch_market_variation_24h,
+    batch_reference_indicators,
+    compute_competitor_summaries,
+    compute_market_variation_24h,
+    compute_reference_indicators,
+)
 
 from app.products.monitored.monitored_model import MonitoredProduct
 from app.products.monitored.monitored_schemas import (
@@ -61,12 +69,25 @@ async def create_monitored(body: MonitoredProductCreate, session: Session) -> Cr
 @router.get("/", response_model=list[MonitoredProductDetail])
 async def list_monitored(session: Session):
     rows = await list_products_with_comparisons(session)
+    ids = [produto.id for produto, _, _ in rows]
+    indicadores = await batch_reference_indicators(session, ids)
+    market_vars = await batch_market_variation_24h(session, ids)
+
     result = []
     for produto, comparacao, count in rows:
         item = MonitoredProductDetail.model_validate(produto)
         if comparacao:
-            item.latest_comparison = ComparisonRead.model_validate(comparacao)
+            snapshot = MarketSnapshotRead.model_validate(comparacao)
+            snapshot.market_variation_24h = market_vars.get(produto.id)
+            item.latest_comparison = snapshot
         item.competitors_count = count
+
+        ref = indicadores.get(produto.id, {})
+        item.variation_24h = ref.get("variation_24h")
+        item.variation_all = ref.get("variation_all")
+        item.previous_price = ref.get("previous_price")
+        item.sparkline = ref.get("sparkline", [])
+
         result.append(item)
     return result
 
@@ -74,8 +95,6 @@ async def list_monitored(session: Session):
 @router.get("/search", response_model=list[SearchResult])
 async def search_monitored(q: str, session: Session) -> list[SearchResult]:
     """Busca produtos monitorados e concorrentes por nome ou URL (mínimo 2 caracteres)."""
-    from sqlalchemy import or_
-
     term = q.strip()
     if len(term) < 2:
         return []
@@ -134,8 +153,36 @@ async def get_monitored(product_id: uuid.UUID, session: Session) -> MonitoredPro
     produto, ultima_comparacao = await get_with_latest_comparison(session, product_id)
 
     detalhe = MonitoredProductDetail.model_validate(produto)
+
+    ref = await compute_reference_indicators(session, product_id)
+    detalhe.variation_24h = ref.get("variation_24h")
+    detalhe.variation_all = ref.get("variation_all")
+    detalhe.previous_price = ref.get("previous_price")
+    detalhe.sparkline = ref.get("sparkline", [])
+
     if ultima_comparacao:
-        detalhe.latest_comparison = ComparisonRead.model_validate(ultima_comparacao)
+        competitors = await compute_competitor_summaries(session, product_id)
+        market_var = await compute_market_variation_24h(session, product_id)
+
+        snapshot = MarketSnapshotRead.model_validate(ultima_comparacao)
+        snapshot.variation_24h = ref.get("variation_24h")
+        snapshot.variation_all = ref.get("variation_all")
+        snapshot.previous_price = ref.get("previous_price")
+        snapshot.sparkline = ref.get("sparkline", [])
+        snapshot.market_variation_24h = market_var
+        snapshot.competitors = [
+            CompetitorSummaryRead(
+                id=c["id"],
+                name=c.get("name"),
+                current_price=c.get("current_price"),
+                variation_24h=c.get("variation_24h"),
+                status=c["status"],
+                thumbnail_url=c.get("thumbnail_url"),
+            )
+            for c in competitors
+        ]
+        detalhe.latest_comparison = snapshot
+
     return detalhe
 
 

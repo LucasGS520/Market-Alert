@@ -1,68 +1,29 @@
 /* global API, mapProduct, mapCompetitor, mapNotification */
 // Cliente HTTP do frontend. Consolida as chamadas que as telas precisam consumir.
-
-async function enrichWithHistory(product) {
-  // Enriquecimento client-side: historico alimenta metricas visuais, nao regras duraveis.
-  try {
-    const r = await fetch(`${API}/price-history/${product.id}`);
-    if (!r.ok) return product;
-    const history = await r.json();
-    if (!history || history.length === 0) return product;
-
-    const prices = history
-      .filter(h => h.price != null)
-      .map(h => ({ price: Number(h.price), ts: new Date(h.collected_at || h.created_at).getTime() }))
-      .sort((a, b) => a.ts - b.ts);
-
-    if (prices.length === 0) return product;
-
-    const now = Date.now();
-    const cutoff24h = now - 86400000;
-    const recent = prices.filter(h => h.ts >= cutoff24h);
-    const current = prices[prices.length - 1]?.price ?? null;
-    const prev24h = recent.length > 1 ? recent[0].price : (prices.length > 1 ? prices[prices.length - 2]?.price : null);
-
-    // Variação de 24h e sparklines sao derivadas para exibicao no dashboard/detalhe.
-    const variation24h = (current != null && prev24h != null && prev24h !== 0)
-      ? ((current - prev24h) / prev24h) * 100
-      : null;
-
-    const latestThumb = [...history].reverse().find(h => h.thumbnail_url);
-
-    const first = prices[0]?.price;
-    const last  = prices[prices.length - 1]?.price;
-    const variation_all = (first != null && first > 0 && last != null)
-      ? ((last - first) / first) * 100
-      : null;
-
-    return {
-      ...product,
-      current_price: current ?? product.current_price,
-      previous_price: prev24h,
-      variation_24h: variation24h,
-      variation_all,
-      last_history_ts: prices.length > 0 ? prices[prices.length - 1].ts : null,
-      history: prices.slice(-30).map(h => h.price),
-      thumbnail_url: latestThumb ? latestThumb.thumbnail_url : (product.thumbnail_url ?? null),
-    };
-  } catch {
-    // Falha em endpoint auxiliar nao deve bloquear a navegacao principal.
-    return product;
-  }
-}
+// Indicadores de variação (variation_24h, variation_all, sparkline) são fornecidos
+// pelo backend — não são recalculados aqui.
 
 const MA_API = {
   async loadDashboard() {
-    // Dashboard monta a tela no cliente com chamadas paralelas, sem agregador backend unico.
     const [productsRaw, notificationsRaw] = await Promise.all([
       fetch(`${API}/monitored/`).then(r => r.json()).catch(() => []),
       fetch(`${API}/notifications?limit=50`).then(r => r.json()).catch(() => []),
     ]);
 
-    const products = await Promise.all(
-      (Array.isArray(productsRaw) ? productsRaw : [])
-        .map(p => enrichWithHistory(mapProduct(p)))
-    );
+    const products = (Array.isArray(productsRaw) ? productsRaw : []).map(p => {
+      const mapped = mapProduct(p);
+      return {
+        ...mapped,
+        variation_24h: p.variation_24h ?? null,
+        variation_all: p.variation_all ?? null,
+        previous_price: p.previous_price != null ? Number(p.previous_price) : null,
+        history: Array.isArray(p.sparkline) ? p.sparkline : [],
+        // substitui last_history_ts que antes vinha do enriquecimento com price-history
+        last_history_ts: mapped.last_successful_collection_at_raw
+          ? new Date(mapped.last_successful_collection_at_raw).getTime()
+          : null,
+      };
+    });
 
     const notifications = (Array.isArray(notificationsRaw) ? notificationsRaw : [])
       .map(mapNotification);
@@ -71,7 +32,6 @@ const MA_API = {
   },
 
   async loadProductDetail(productId) {
-    // Detalhe combina produto e concorrentes; historicos sao buscados depois para graficos.
     const [detailRaw, competitorsRaw] = await Promise.all([
       fetch(`${API}/monitored/${productId}`).then(r => r.json()).catch(() => null),
       fetch(`${API}/monitored/${productId}/competitors`).then(r => r.json()).catch(() => []),
@@ -79,51 +39,38 @@ const MA_API = {
 
     if (!detailRaw) return null;
 
-    let product = mapProduct(detailRaw);
-    product = await enrichWithHistory(product);
+    const mapped = mapProduct(detailRaw);
+    const product = {
+      ...mapped,
+      variation_24h: detailRaw.variation_24h ?? null,
+      variation_all: detailRaw.variation_all ?? null,
+      previous_price: detailRaw.previous_price != null ? Number(detailRaw.previous_price) : null,
+      history: Array.isArray(detailRaw.sparkline) ? detailRaw.sparkline : [],
+    };
 
-    const competitors = (Array.isArray(competitorsRaw) ? competitorsRaw : [])
-      .map(mapCompetitor);
+    // Resumo dos concorrentes (variation_24h, thumbnail_url) já calculado pelo backend
+    const summaryMap = {};
+    const backendCompetitors = detailRaw.latest_comparison?.competitors;
+    if (Array.isArray(backendCompetitors)) {
+      for (const s of backendCompetitors) {
+        summaryMap[s.id] = s;
+      }
+    }
 
-    const competitorCount = competitors.length;
-
-    const enrichedCompetitors = await Promise.all(
-      competitors.map(async c => {
-        try {
-          const r = await fetch(`${API}/price-history/competitor/${c.id}`);
-          if (!r.ok) return c;
-          const h = await r.json();
-          if (!h || h.length === 0) return c;
-          const prices = h
-            .filter(x => x.price != null)
-            .map(x => ({ price: Number(x.price), ts: new Date(x.collected_at || x.created_at).getTime() }))
-            .sort((a, b) => a.ts - b.ts);
-          if (prices.length < 2) return c;
-          const now = Date.now();
-          const cutoff = now - 86400000;
-          const recent = prices.filter(x => x.ts >= cutoff);
-          const cur = prices[prices.length - 1]?.price;
-          const prev = recent.length > 1 ? recent[0].price : prices[prices.length - 2]?.price;
-          const variation = (cur != null && prev != null && prev !== 0)
-            ? ((cur - prev) / prev) * 100 : null;
-          const latestThumb = [...h].reverse().find(x => x.thumbnail_url);
-          return {
-            ...c,
-            current_price: cur ?? c.current_price,
-            variation_24h: variation,
-            thumbnail_url: latestThumb ? latestThumb.thumbnail_url : (c.thumbnail_url ?? null),
-          };
-        } catch {
-          // Concorrente sem historico continua aparecendo com os dados principais.
-          return c;
-        }
-      })
-    );
+    const competitors = (Array.isArray(competitorsRaw) ? competitorsRaw : []).map(c => {
+      const base = mapCompetitor(c);
+      const summary = summaryMap[c.id] || {};
+      return {
+        ...base,
+        variation_24h: summary.variation_24h ?? null,
+        thumbnail_url: summary.thumbnail_url ?? null,
+      };
+    });
 
     return {
       ...product,
-      competitors: enrichedCompetitors,
-      competitors_count: competitorCount,
+      competitors,
+      competitors_count: competitors.length,
     };
   },
 
@@ -140,4 +87,4 @@ const MA_API = {
 };
 
 // Contrato publico do frontend para App.jsx.
-Object.assign(window, { MA_API, enrichWithHistory });
+Object.assign(window, { MA_API });

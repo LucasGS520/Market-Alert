@@ -29,7 +29,6 @@ function CollectField({ label, value, icon, highlight }) {
 }
 
 function ProductDetail({ product, onBack, onRefresh }) {
-  const [range, setRange] = React.useState('30');
   const [paused, setPaused] = React.useState(product.status === 'paused');
   const [toggling, setToggling] = React.useState(false);
 
@@ -142,18 +141,18 @@ function ProductDetail({ product, onBack, onRefresh }) {
             )}
             {!product.is_price_stale && (
               <div style={{marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4}}>
-                <div style={{display: 'flex', alignItems: 'center', gap: 6, fontSize: 12}}>
-                  <VariationBadge value={product.variation_24h}/>
-                  {product.previous_price != null && (
-                    <span style={{color: 'var(--ma-fg-muted)'}}>vs. <span style={{fontFamily: 'var(--ma-font-mono)'}}>{brl(product.previous_price)}</span> (24h)</span>
-                  )}
-                </div>
-                {product.variation_all != null && (
-                  <div style={{display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--ma-fg-muted)'}}>
-                    <VariationBadge value={product.variation_all}/>
-                    <span>desde o início</span>
+                {(product.variation_since_previous != null || product.previous_price != null) && (
+                  <div style={{display: 'flex', alignItems: 'center', gap: 6, fontSize: 12}}>
+                    <VariationBadge value={product.variation_since_previous}/>
+                    {product.previous_price != null && (
+                      <span style={{color: 'var(--ma-fg-muted)'}}>vs. <span style={{fontFamily: 'var(--ma-font-mono)'}}>{brl(product.previous_price)}</span></span>
+                    )}
                   </div>
                 )}
+                <div style={{display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--ma-fg-muted)'}}>
+                  <VariationBadge value={product.variation_since_start}/>
+                  <span>desde o início</span>
+                </div>
               </div>
             )}
           </div>
@@ -248,8 +247,11 @@ function ProductDetail({ product, onBack, onRefresh }) {
                 <div>
                   <span className="ma-meta">menor</span>
                   <div style={{fontFamily:'var(--ma-font-mono)', color:'var(--ma-success)', fontWeight: 600}}>{brl(cmp.min_price)}</div>
-                  {cmp.market_variation_24h != null && (
-                    <div style={{marginTop: 2}}><VariationBadge value={cmp.market_variation_24h}/></div>
+                  {product.market_min_variation_since_start != null && (
+                    <div style={{marginTop: 2, display:'flex', alignItems:'center', gap: 4}}>
+                      <VariationBadge value={product.market_min_variation_since_start}/>
+                      <span style={{fontSize: 10, color:'var(--ma-fg-subtle)'}}>início</span>
+                    </div>
                   )}
                 </div>
                 <div>
@@ -269,15 +271,14 @@ function ProductDetail({ product, onBack, onRefresh }) {
             </div>
           )}
           <div className="ma-divider"/>
-          <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom: 8}}>
-            <span style={{fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ma-fg-subtle)'}}>Evolução de preço</span>
-            <div style={{display:'flex', gap: 4}}>
-              {['7', '30', '90'].map(r => (
-                <button key={r} className={`ma-chip ${range === r ? 'is-active' : ''}`} onClick={() => setRange(r)}>{r} dias</button>
-              ))}
-            </div>
+          <div style={{marginBottom: 8}}>
+            <span style={{fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ma-fg-subtle)'}}>Histórico do monitoramento</span>
           </div>
-          <PriceChart data={product.history}/>
+          <PriceChart series={[
+            { id: 'product', label: 'Seu produto', color: '#FF7A1A', data: product.product_series || [] },
+            ...(product.market_min_series && product.market_min_series.length >= 2 ? [{ id: 'market_min', label: 'Menor preço', color: '#2DD4BF', data: product.market_min_series }] : []),
+            ...(product.market_avg_series && product.market_avg_series.length >= 2 ? [{ id: 'market_avg', label: 'Preço médio', color: '#818CF8', data: product.market_avg_series }] : []),
+          ]}/>
         </Card>
       </div>
 
@@ -307,11 +308,9 @@ function ProductDetail({ product, onBack, onRefresh }) {
           </div>
           <Card padded={false}>
             {[...competitors].sort((a, b) => (a.current_price || 0) - (b.current_price || 0)).map((c, i) => {
-              // Diferenca e calculada contra o preco atual do produto monitorado.
-              const myPrice = product.current_price || 0;
-              const diff = (c.current_price || 0) - myPrice;
-              const diffPct = myPrice ? (diff / myPrice) * 100 : 0;
-              const isBelow = diff < 0;
+              const gap = c.gap_vs_product;
+              const gapPct = c.gap_vs_product_percent;
+              const isBelow = gap != null ? gap < 0 : false;
               return (
                 <div key={c.id} className="ma-comp-row ma-comp-row-detailed">
                   {c.thumbnail_url
@@ -326,13 +325,21 @@ function ProductDetail({ product, onBack, onRefresh }) {
                       <span style={{fontSize: 10, color: 'var(--ma-fg-subtle)', fontFamily: 'var(--ma-font-mono)', background: 'var(--ma-neutral-500)', padding: '1px 6px', borderRadius: 4}}>#{i + 1}</span>
                       <MarketplaceChip marketplace={c.marketplace} size="sm"/>
                     </div>
-                    <div className="ma-comp-seen">coletado {c.last_checked_at} · {isBelow ? 'abaixo do seu preço' : 'acima do seu preço'}</div>
+                    <div className="ma-comp-seen">coletado {c.last_checked_at} · {gap != null ? (isBelow ? 'abaixo do seu preço' : 'acima do seu preço') : '—'}</div>
                   </div>
                   <div className="ma-comp-price">{brl(c.current_price)}</div>
-                  <div><VariationBadge value={c.variation_24h}/></div>
+                  <div>
+                    <VariationBadge value={c.variation_since_start}/>
+                    <div style={{fontSize: 10, color:'var(--ma-fg-subtle)', marginTop: 2}}>desde o início</div>
+                  </div>
                   <div className={`ma-comp-diff ${isBelow ? 'above' : 'below'}`}>
-                    {diff > 0 ? '+' : '−'}{brl(Math.abs(diff)).replace('R$ ', 'R$ ')}
-                    <div style={{fontSize: 10, opacity: 0.7}}>{diff > 0 ? '+' : '−'}{Math.abs(diffPct).toFixed(1).replace('.', ',')}%</div>
+                    {gap != null ? (
+                      <>
+                        {gap > 0 ? '+' : '−'}{brl(Math.abs(gap)).replace('R$ ', 'R$ ')}
+                        <div style={{fontSize: 10, opacity: 0.7}}>{gapPct != null ? `${gapPct > 0 ? '+' : '−'}${Math.abs(gapPct).toFixed(1).replace('.', ',')}%` : ''}</div>
+                        <div style={{fontSize: 9, color:'var(--ma-fg-subtle)', marginTop: 1}}>gap competitivo</div>
+                      </>
+                    ) : '—'}
                   </div>
                   <div style={{display:'flex', gap: 4, justifyContent:'flex-end'}}>
                     <IconButton name="external" size="sm" title="Ver anúncio" onClick={() => window.open(c.url_original, '_blank')}/>

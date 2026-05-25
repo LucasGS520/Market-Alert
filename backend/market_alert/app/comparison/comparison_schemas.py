@@ -8,6 +8,11 @@ from pydantic import BaseModel, ConfigDict, Field
 RunStatusLiteral = Literal["complete", "partial", "expired", "no_competitors", "manual"]
 
 
+class PricePoint(BaseModel):
+    t: datetime
+    v: float
+
+
 class ComparisonRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -36,18 +41,24 @@ class CompetitorSummaryRead(BaseModel):
     id: uuid.UUID
     name: str | None
     current_price: Decimal | None
-    variation_24h: float | None
-    status: str
+    initial_price: Decimal | None = None
+    variation_since_start: float | None = None
+    gap_vs_product: Decimal | None = None
+    gap_vs_product_percent: float | None = None
+    status: str | None
     thumbnail_url: str | None
 
 
 class MarketSnapshotRead(ComparisonRead):
-    # Indicadores temporais da oferta de referência
-    variation_24h: float | None = None
-    variation_all: float | None = None
-    previous_price: Decimal | None = None
-    sparkline: list[float] = Field(default_factory=list)
-    # Indicador de mercado
-    market_variation_24h: float | None = None
+    # Séries temporais de mercado (histórico de Comparison)
+    market_min_series: list[PricePoint] = Field(default_factory=list)
+    market_avg_series: list[PricePoint] = Field(default_factory=list)
+    # Indicadores de mercado "desde o início"
+    market_min_current: Decimal | None = None
+    market_min_initial: Decimal | None = None
+    market_min_variation_since_start: float | None = None
+    market_avg_current: Decimal | None = None
+    market_avg_initial: Decimal | None = None
+    market_avg_variation_since_start: float | None = None
     # Resumo das ofertas concorrentes
     competitors: list[CompetitorSummaryRead] = Field(default_factory=list)

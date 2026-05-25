@@ -10,12 +10,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infra.database import get_session
 from app.comparison.comparison_schemas import CompetitorSummaryRead, MarketSnapshotRead
+from app.comparison.comparison_schemas import PricePoint
 from app.comparison.market_indicators_service import (
-    batch_market_variation_24h,
     batch_reference_indicators,
     compute_competitor_summaries,
-    compute_market_variation_24h,
-    compute_reference_indicators,
+    compute_market_series,
+    compute_reference_series,
 )
 
 from app.products.monitored.monitored_model import MonitoredProduct
@@ -71,14 +71,12 @@ async def list_monitored(session: Session):
     rows = await list_products_with_comparisons(session)
     ids = [produto.id for produto, _, _ in rows]
     indicadores = await batch_reference_indicators(session, ids)
-    market_vars = await batch_market_variation_24h(session, ids)
 
     result = []
     for produto, comparacao, count in rows:
         item = MonitoredProductDetail.model_validate(produto)
         if comparacao:
             snapshot = MarketSnapshotRead.model_validate(comparacao)
-            snapshot.market_variation_24h = market_vars.get(produto.id)
             item.latest_comparison = snapshot
         item.competitors_count = count
 
@@ -154,29 +152,39 @@ async def get_monitored(product_id: uuid.UUID, session: Session) -> MonitoredPro
 
     detalhe = MonitoredProductDetail.model_validate(produto)
 
-    ref = await compute_reference_indicators(session, product_id)
-    detalhe.variation_24h = ref.get("variation_24h")
-    detalhe.variation_all = ref.get("variation_all")
+    ref = await compute_reference_series(session, product_id)
+    detalhe.product_series = [PricePoint(**p) for p in ref.get("product_series", [])]
+    detalhe.initial_price = ref.get("initial_price")
     detalhe.previous_price = ref.get("previous_price")
-    detalhe.sparkline = ref.get("sparkline", [])
+    detalhe.variation_since_start = ref.get("variation_since_start")
+    detalhe.variation_since_previous = ref.get("variation_since_previous")
+    detalhe.trend_since_start = ref.get("trend_since_start", "insufficient_data")
 
     if ultima_comparacao:
-        competitors = await compute_competitor_summaries(session, product_id)
-        market_var = await compute_market_variation_24h(session, product_id)
+        market = await compute_market_series(session, product_id)
+        competitors = await compute_competitor_summaries(
+            session, product_id, reference_price=produto.current_price
+        )
 
         snapshot = MarketSnapshotRead.model_validate(ultima_comparacao)
-        snapshot.variation_24h = ref.get("variation_24h")
-        snapshot.variation_all = ref.get("variation_all")
-        snapshot.previous_price = ref.get("previous_price")
-        snapshot.sparkline = ref.get("sparkline", [])
-        snapshot.market_variation_24h = market_var
+        snapshot.market_min_series = [PricePoint(**p) for p in market.get("market_min_series", [])]
+        snapshot.market_avg_series = [PricePoint(**p) for p in market.get("market_avg_series", [])]
+        snapshot.market_min_current = market.get("market_min_current")
+        snapshot.market_min_initial = market.get("market_min_initial")
+        snapshot.market_min_variation_since_start = market.get("market_min_variation_since_start")
+        snapshot.market_avg_current = market.get("market_avg_current")
+        snapshot.market_avg_initial = market.get("market_avg_initial")
+        snapshot.market_avg_variation_since_start = market.get("market_avg_variation_since_start")
         snapshot.competitors = [
             CompetitorSummaryRead(
                 id=c["id"],
                 name=c.get("name"),
                 current_price=c.get("current_price"),
-                variation_24h=c.get("variation_24h"),
-                status=c["status"],
+                initial_price=c.get("initial_price"),
+                variation_since_start=c.get("variation_since_start"),
+                gap_vs_product=c.get("gap_vs_product"),
+                gap_vs_product_percent=c.get("gap_vs_product_percent"),
+                status=c.get("status"),
                 thumbnail_url=c.get("thumbnail_url"),
             )
             for c in competitors

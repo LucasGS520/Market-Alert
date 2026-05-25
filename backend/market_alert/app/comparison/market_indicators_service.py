@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.comparison.comparison_model import Comparison
 from app.comparison.comparison_service import get_comparison_history
+from app.infra.config import settings
 from app.products.competitor.competitor_model import Competitor
 from app.products.price_history.price_history_service import get_product_price_history
 from app.products.price_history.price_model import PriceHistory
@@ -199,8 +200,9 @@ async def batch_market_variation_24h(
 async def compute_competitor_summaries(
     session: AsyncSession,
     monitored_id: uuid.UUID,
+    reference_price: Decimal | None = None,
 ) -> list[dict]:
-    """Resumo de cada concorrente com variation_24h e thumbnail mais recente.
+    """Resumo de cada concorrente com variação desde o início e gap competitivo.
 
     2 queries fixas independente do número de concorrentes.
     """
@@ -236,7 +238,20 @@ async def compute_competitor_summaries(
             if r.price is not None and r.is_available
         ]
 
-        variation_24h = _variacao_24h(precos_asc) if precos_asc else None
+        initial_price: Decimal | None = precos_asc[0][0] if precos_asc else None
+        current_price: Decimal | None = (
+            Decimal(str(c.current_price)) if c.current_price is not None else None
+        )
+
+        variation_since_start: float | None = None
+        if initial_price is not None and current_price is not None and len(precos_asc) >= 2 and initial_price > 0:
+            variation_since_start = float((current_price - initial_price) / initial_price * 100)
+
+        gap_vs_product: Decimal | None = None
+        gap_vs_product_percent: float | None = None
+        if current_price is not None and reference_price is not None and reference_price > 0:
+            gap_vs_product = current_price - reference_price
+            gap_vs_product_percent = float(gap_vs_product / reference_price * 100)
 
         thumbnail_url = next(
             (r.thumbnail_url for r in registros if r.thumbnail_url),
@@ -246,8 +261,11 @@ async def compute_competitor_summaries(
         summaries.append({
             "id": c.id,
             "name": c.name,
-            "current_price": Decimal(str(c.current_price)) if c.current_price is not None else None,
-            "variation_24h": variation_24h,
+            "current_price": current_price,
+            "initial_price": initial_price,
+            "variation_since_start": variation_since_start,
+            "gap_vs_product": gap_vs_product,
+            "gap_vs_product_percent": gap_vs_product_percent,
             "status": c.status,
             "thumbnail_url": thumbnail_url,
         })
@@ -294,3 +312,134 @@ async def compute_market_variation_24h(
         return None
 
     return float((min_atual - min_base) / min_base * 100)
+
+
+# ── Funções para contrato de detalhe (séries temporais + indicadores "desde o início") ──
+
+
+def _trend_direction(variation: float | None) -> str:
+    threshold = float(settings.price_stability_change_threshold_percent)
+    if variation is None:
+        return "insufficient_data"
+    if variation >= threshold:
+        return "up"
+    if variation <= -threshold:
+        return "down"
+    return "flat"
+
+
+async def compute_reference_series(
+    session: AsyncSession,
+    monitored_id: uuid.UUID,
+) -> dict:
+    """Série temporal e indicadores 'desde o início' da oferta de referência.
+
+    Retorna product_series (ASC), initial_price, previous_price,
+    variation_since_start, variation_since_previous e trend_since_start.
+    """
+    registros = await get_product_price_history(session, monitored_id, limit=200)
+
+    empty: dict = {
+        "product_series": [],
+        "initial_price": None,
+        "previous_price": None,
+        "variation_since_start": None,
+        "variation_since_previous": None,
+        "trend_since_start": "insufficient_data",
+    }
+
+    if not registros:
+        return empty
+
+    precos_asc: list[tuple[Decimal, datetime]] = [
+        (Decimal(str(r.price)), r.collected_at)
+        for r in reversed(registros)
+        if r.price is not None and r.is_available
+    ]
+
+    if not precos_asc:
+        return empty
+
+    product_series = [{"t": ts, "v": float(p)} for p, ts in precos_asc]
+
+    initial_price = precos_asc[0][0]
+    current_price = precos_asc[-1][0]
+    previous_price = precos_asc[-2][0] if len(precos_asc) >= 2 else None
+
+    variation_since_start: float | None = None
+    if len(precos_asc) >= 2 and initial_price > 0:
+        variation_since_start = float((current_price - initial_price) / initial_price * 100)
+
+    variation_since_previous: float | None = None
+    if previous_price is not None and previous_price > 0:
+        variation_since_previous = float((current_price - previous_price) / previous_price * 100)
+
+    return {
+        "product_series": product_series,
+        "initial_price": initial_price,
+        "previous_price": previous_price,
+        "variation_since_start": variation_since_start,
+        "variation_since_previous": variation_since_previous,
+        "trend_since_start": _trend_direction(variation_since_start),
+    }
+
+
+async def compute_market_series(
+    session: AsyncSession,
+    monitored_id: uuid.UUID,
+) -> dict:
+    """Séries temporais e indicadores 'desde o início' do mercado monitorado.
+
+    Usa histórico de Comparison (min_price, average_price) em ordem ASC.
+    """
+    historico = await get_comparison_history(session, monitored_id, limit=200)
+
+    empty: dict = {
+        "market_min_series": [],
+        "market_avg_series": [],
+        "market_min_current": None,
+        "market_min_initial": None,
+        "market_min_variation_since_start": None,
+        "market_avg_current": None,
+        "market_avg_initial": None,
+        "market_avg_variation_since_start": None,
+    }
+
+    if not historico:
+        return empty
+
+    # historico vem DESC — inverter para ordem cronológica
+    snapshots_asc = list(reversed(historico))
+
+    market_min_series = [
+        {"t": s.calculated_at, "v": float(s.min_price)}
+        for s in snapshots_asc
+    ]
+    market_avg_series = [
+        {"t": s.calculated_at, "v": float(s.average_price)}
+        for s in snapshots_asc
+    ]
+
+    min_initial = Decimal(str(snapshots_asc[0].min_price))
+    min_current = Decimal(str(snapshots_asc[-1].min_price))
+    avg_initial = Decimal(str(snapshots_asc[0].average_price))
+    avg_current = Decimal(str(snapshots_asc[-1].average_price))
+
+    min_variation: float | None = None
+    if len(snapshots_asc) >= 2 and min_initial > 0:
+        min_variation = float((min_current - min_initial) / min_initial * 100)
+
+    avg_variation: float | None = None
+    if len(snapshots_asc) >= 2 and avg_initial > 0:
+        avg_variation = float((avg_current - avg_initial) / avg_initial * 100)
+
+    return {
+        "market_min_series": market_min_series,
+        "market_avg_series": market_avg_series,
+        "market_min_current": min_current,
+        "market_min_initial": min_initial,
+        "market_min_variation_since_start": min_variation,
+        "market_avg_current": avg_current,
+        "market_avg_initial": avg_initial,
+        "market_avg_variation_since_start": avg_variation,
+    }

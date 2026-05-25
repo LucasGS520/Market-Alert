@@ -39,18 +39,29 @@ const MA_API = {
 
     if (!detailRaw) return null;
 
+    const cmpRaw = detailRaw.latest_comparison;
     const mapped = mapProduct(detailRaw);
     const product = {
       ...mapped,
-      variation_24h: detailRaw.variation_24h ?? null,
-      variation_all: detailRaw.variation_all ?? null,
+      // Indicadores do produto "desde o início"
+      initial_price: detailRaw.initial_price != null ? Number(detailRaw.initial_price) : null,
       previous_price: detailRaw.previous_price != null ? Number(detailRaw.previous_price) : null,
-      history: Array.isArray(detailRaw.sparkline) ? detailRaw.sparkline : [],
+      variation_since_start: detailRaw.variation_since_start ?? null,
+      variation_since_previous: detailRaw.variation_since_previous ?? null,
+      trend_since_start: detailRaw.trend_since_start ?? 'insufficient_data',
+      product_series: Array.isArray(detailRaw.product_series) ? detailRaw.product_series : [],
+      // Séries e indicadores de mercado (de latest_comparison)
+      market_min_series: Array.isArray(cmpRaw?.market_min_series) ? cmpRaw.market_min_series : [],
+      market_avg_series: Array.isArray(cmpRaw?.market_avg_series) ? cmpRaw.market_avg_series : [],
+      market_min_current: cmpRaw?.market_min_current != null ? Number(cmpRaw.market_min_current) : null,
+      market_min_variation_since_start: cmpRaw?.market_min_variation_since_start ?? null,
+      market_avg_current: cmpRaw?.market_avg_current != null ? Number(cmpRaw.market_avg_current) : null,
+      market_avg_variation_since_start: cmpRaw?.market_avg_variation_since_start ?? null,
     };
 
-    // Resumo dos concorrentes (variation_24h, thumbnail_url) já calculado pelo backend
+    // Resumo dos concorrentes (variation_since_start, gap, thumbnail) calculado pelo backend
     const summaryMap = {};
-    const backendCompetitors = detailRaw.latest_comparison?.competitors;
+    const backendCompetitors = cmpRaw?.competitors;
     if (Array.isArray(backendCompetitors)) {
       for (const s of backendCompetitors) {
         summaryMap[s.id] = s;
@@ -62,7 +73,10 @@ const MA_API = {
       const summary = summaryMap[c.id] || {};
       return {
         ...base,
-        variation_24h: summary.variation_24h ?? null,
+        variation_since_start: summary.variation_since_start ?? null,
+        initial_price: summary.initial_price != null ? Number(summary.initial_price) : null,
+        gap_vs_product: summary.gap_vs_product != null ? Number(summary.gap_vs_product) : null,
+        gap_vs_product_percent: summary.gap_vs_product_percent ?? null,
         thumbnail_url: summary.thumbnail_url ?? null,
       };
     });

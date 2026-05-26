@@ -14,10 +14,12 @@ const MA_API = {
       const mapped = mapProduct(p);
       return {
         ...mapped,
+        thumbnail_url: p.thumbnail_url ?? null,
         variation_24h: p.variation_24h ?? null,
         variation_all: p.variation_all ?? null,
         previous_price: p.previous_price != null ? Number(p.previous_price) : null,
         history: Array.isArray(p.sparkline) ? p.sparkline : [],
+        market_avg_sparkline: Array.isArray(p.market_avg_sparkline) ? p.market_avg_sparkline : [],
         // substitui last_history_ts que antes vinha do enriquecimento com price-history
         last_history_ts: mapped.last_successful_collection_at_raw
           ? new Date(mapped.last_successful_collection_at_raw).getTime()

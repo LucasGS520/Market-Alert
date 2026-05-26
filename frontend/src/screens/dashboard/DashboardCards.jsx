@@ -12,9 +12,13 @@ function KpiCard({ label, value, sub, accent }) {
 }
 
 function TopMoverCard({ product, onOpen }) {
-  // variation_all é a tendência acumulada; variation_24h é o detalhe recente.
+  // variation_all é a tendência acumulada do produto; variation_24h é o detalhe recente.
   const primaryVar = product.variation_all ?? product.variation_24h ?? 0;
-  const up = primaryVar > 0.1;
+  // Cor e dados do sparkline refletem tendência do mercado (average_price), não do monitorado.
+  const mks = product.market_avg_sparkline || [];
+  const mktColor = mks.length >= 2
+    ? (mks[mks.length - 1] > mks[0] ? 'var(--ma-success)' : 'var(--ma-danger)')
+    : (primaryVar > 0.1 ? 'var(--ma-danger)' : 'var(--ma-success)');
   return (
     <button
       onClick={() => onOpen(product.id)}
@@ -43,8 +47,7 @@ function TopMoverCard({ product, onOpen }) {
             )}
           </div>
         </div>
-        <Sparkline data={product.history} width={80} height={32}
-          color={up ? 'var(--ma-danger)' : 'var(--ma-success)'}/>
+        <Sparkline data={mks} width={80} height={32} color={mktColor}/>
       </div>
     </button>
   );

@@ -68,8 +68,8 @@ function MarketplaceChip({ marketplace, size = 'md' }) {
 const EVENT_META = {
   // Metadados visuais para event_type vindo de NotificationLog.
   // Chaves correspondem aos alert_type reais do backend (notifications_service.py).
-  price_drop_alert:           { label: 'Queda de preço',       icon: 'trend-down', tone: 'success' },
-  price_rise_alert:           { label: 'Alta de preço',        icon: 'trend-up',   tone: 'danger'  },
+  price_drop_alert:           { label: 'Queda de preço',       icon: 'arrow-down', tone: 'danger'  },
+  price_rise_alert:           { label: 'Alta de preço',        icon: 'arrow-up',   tone: 'success' },
   competitive_position_alert: { label: 'Posição competitiva',  icon: 'target',     tone: 'brand'   },
   market_alert:               { label: 'Variação de mercado',  icon: 'trend-down', tone: 'info'    },
   availability_alert:         { label: 'Disponibilidade',      icon: 'eye',        tone: 'warning' },

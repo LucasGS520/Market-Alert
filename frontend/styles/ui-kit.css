@@ -165,7 +165,8 @@ button { font-family: inherit; }
 
 /* ====================== Comparison status badge ====================== */
 .ma-cmp-badge {
-  display: inline-flex; align-items: center; gap: 5px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  min-width: 100px;
   padding: 3px 9px 3px 8px;
   border-radius: var(--ma-radius-pill);
   font-size: 11px; font-weight: 700;
@@ -292,6 +293,17 @@ button { font-family: inherit; }
 .ma-chip.is-active { background: var(--ma-neutral-500); color: var(--ma-fg-strong); border-color: var(--ma-border-strong); }
 .ma-chip.is-active.is-brand { background: var(--ma-brand-primary); color: #13141B; border-color: var(--ma-brand-primary); }
 
+/* ====================== Filter bar ====================== */
+.ma-filter-bar { display: inline-flex; background: var(--ma-neutral-700); border: 1px solid var(--ma-border); border-radius: var(--ma-radius-pill); padding: 3px; gap: 2px; }
+.ma-filter-item { padding: 5px 12px; border-radius: var(--ma-radius-pill); font-size: 12px; font-weight: 600; background: transparent; color: var(--ma-fg-muted); border: none; cursor: pointer; white-space: nowrap; transition: background var(--ma-dur-fast) var(--ma-ease-out), color var(--ma-dur-fast) var(--ma-ease-out); }
+.ma-filter-item:hover { color: var(--ma-fg-strong); }
+.ma-filter-item.is-active { background: var(--ma-neutral-500); color: var(--ma-fg-strong); }
+.ma-filter-item.is-brand { background: var(--ma-brand-primary); color: #13141B; }
+
+/* ====================== Sort select ====================== */
+.ma-sort-select { padding: 6px 10px; border-radius: var(--ma-radius-pill); font-size: 12px; font-weight: 600; background: var(--ma-neutral-700); color: var(--ma-fg-muted); border: 1px solid var(--ma-border); cursor: pointer; font-family: inherit; outline: none; }
+.ma-sort-select:hover { color: var(--ma-fg-strong); border-color: var(--ma-border-strong); }
+
 /* ====================== Table / monitor list ====================== */
 .ma-table { width: 100%; border-collapse: separate; border-spacing: 0; }
 .ma-table th {
@@ -314,14 +326,15 @@ button { font-family: inherit; }
 .ma-table tr.ma-row:last-child td:first-child { border-bottom-left-radius: var(--ma-radius-md); }
 .ma-table tr.ma-row:last-child td:last-child { border-bottom-right-radius: var(--ma-radius-md); }
 .ma-table .cell-product { display: flex; align-items: center; gap: 12px; }
-.ma-table .cell-thumb { width: 36px; height: 36px; border-radius: 8px; background: var(--ma-neutral-500); display:flex; align-items:center; justify-content:center; color: var(--ma-fg-muted); flex-shrink: 0; }
+.ma-table .cell-thumb { width: 36px; height: 36px; border-radius: 8px; background: var(--ma-neutral-500); display:flex; align-items:center; justify-content:center; color: var(--ma-fg-muted); flex-shrink: 0; overflow: hidden; }
+.ma-table .cell-thumb img { width: 100%; height: 100%; object-fit: contain; padding: 3px; display: block; }
 .ma-table .cell-name { font-weight: 700; color: var(--ma-fg-strong); }
 .ma-table .cell-url { font-size: 11px; color: var(--ma-fg-muted); font-family: var(--ma-font-mono); margin-top: 1px; }
 .ma-table .num { font-family: var(--ma-font-mono); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; text-align: right; }
 .ma-table .num .sub { display: block; font-size: 10px; color: var(--ma-fg-subtle); margin-top: 2px; font-weight: 400; }
 
 /* ====================== Spark line ====================== */
-.ma-spark { display: inline-block; vertical-align: middle; }
+.ma-spark { display: block; }
 
 /* ====================== Notifications drawer ====================== */
 .ma-drawer-mask {

@@ -16,6 +16,36 @@ const STABILITY_LABEL = {
   very_stable: 'muito estável',
 };
 
+const RUN_STATUS_LABEL = {
+  complete:       'Completa',
+  partial:        'Parcial',
+  expired:        'Expirada',
+  no_competitors: 'Sem concorrentes',
+  manual:         'Manual',
+  pending:        'Pendente',
+};
+
+function Tooltip({ content, children }) {
+  const [show, setShow] = React.useState(false);
+  return (
+    <div style={{position:'relative', display:'inline-flex'}}
+      onMouseEnter={() => setShow(true)}
+      onMouseLeave={() => setShow(false)}>
+      {children}
+      {show && (
+        <div style={{
+          position:'absolute', bottom:'calc(100% + 6px)', left:'50%', transform:'translateX(-50%)',
+          background:'#1e1e2e', border:'1px solid var(--ma-border)', borderRadius:6,
+          padding:'6px 10px', fontSize:11, color:'var(--ma-fg)', whiteSpace:'nowrap',
+          zIndex:200, pointerEvents:'none', boxShadow:'0 4px 12px rgba(0,0,0,0.5)', lineHeight:1.5,
+        }}>
+          {content}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CollectField({ label, value, icon, highlight }) {
   return (
     <div style={{display:'flex', alignItems:'center', gap: 8}}>
@@ -149,9 +179,10 @@ function ProductDetail({ product, onBack, onRefresh }) {
                     )}
                   </div>
                 )}
-                <div style={{display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--ma-fg-muted)'}}>
-                  <VariationBadge value={product.variation_since_start}/>
-                  <span>desde o início</span>
+                <div style={{display: 'flex', alignItems: 'center', gap: 6, fontSize: 11}}>
+                  <Tooltip content="Variação acumulada desde a primeira coleta registrada para este produto.">
+                    <VariationBadge value={product.variation_since_start}/>
+                  </Tooltip>
                 </div>
               </div>
             )}
@@ -201,6 +232,16 @@ function ProductDetail({ product, onBack, onRefresh }) {
                   </div>
                 );
               })()}
+              {/* Insight de gap vs. média — leitura derivada, não KPI principal */}
+              {product.current_price != null && cmp.average_price != null && (
+                <div style={{fontSize: 12, color: 'var(--ma-fg-muted)', marginTop: 8}}>
+                  {product.current_price < cmp.average_price
+                    ? `Você está ${((1 - product.current_price / cmp.average_price) * 100).toFixed(1).replace('.', ',')}% abaixo da média do mercado.`
+                    : product.current_price > cmp.average_price
+                    ? `Você está ${((product.current_price / cmp.average_price - 1) * 100).toFixed(1).replace('.', ',')}% acima da média do mercado.`
+                    : 'Você está na média do mercado.'}
+                </div>
+              )}
               {cmp.reference_available === false && (
                 <div style={{
                   display: 'flex', alignItems: 'center', gap: 8,
@@ -226,42 +267,56 @@ function ProductDetail({ product, onBack, onRefresh }) {
           )}
         </Card>
 
-        {/* DIREITA (largo): Mercado monitorado — métricas de mercado + gráfico */}
+        {/* DIREITA (largo): Mercado monitorado — 3 zonas: cabeçalho, KPIs, histórico */}
         <Card>
-          <div className="ma-eyebrow">Mercado monitorado</div>
+          {/* Zona 1 — Cabeçalho operacional */}
+          <div style={{display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap: 12, flexWrap:'wrap'}}>
+            <div>
+              <div className="ma-eyebrow" style={{marginBottom: 2}}>Mercado monitorado</div>
+              <div style={{fontSize: 11, color:'var(--ma-fg-subtle)'}}>desde o início do monitoramento</div>
+            </div>
+            {cmp && (
+              <div style={{
+                fontSize: 11, fontFamily:'var(--ma-font-mono)', fontWeight: 600, textAlign:'right',
+                color: (cmp.run_status === 'partial' || cmp.run_status === 'expired')
+                  ? 'var(--ma-warning)' : 'var(--ma-fg-muted)',
+              }}>
+                {RUN_STATUS_LABEL[cmp.run_status] || cmp.run_status || '—'}
+                {' · '}
+                {cmp.valid_competitors_count || 0}/{(cmp.participants_count || 1) - 1} concorrentes
+              </div>
+            )}
+          </div>
+
+          {/* Zona 2 — KPIs horizontais iguais */}
           {cmp ? (
             <>
-              <div style={{marginTop: 14}}>
-                <div className="ma-kpi-label">Preço médio de mercado</div>
-                <div className="ma-kpi-value" style={{fontSize: 28}}>{brl(cmp.average_price)}</div>
-                <div className="ma-kpi-sub">
-                  {product.current_price != null && cmp.average_price != null && (
-                    product.current_price < cmp.average_price
-                      ? `você está ${((1 - product.current_price / cmp.average_price) * 100).toFixed(1).replace('.', ',')}% abaixo`
-                      : `você está ${((product.current_price / cmp.average_price - 1) * 100).toFixed(1).replace('.', ',')}% acima`
-                  )}
-                </div>
-              </div>
               <div className="ma-divider"/>
-              <div style={{display:'flex', gap: 20, fontSize: 12, flexWrap:'wrap'}}>
-                <div>
-                  <span className="ma-meta">menor</span>
-                  <div style={{fontFamily:'var(--ma-font-mono)', color:'var(--ma-success)', fontWeight: 600}}>{brl(cmp.min_price)}</div>
-                  {product.market_min_variation_since_start != null && (
-                    <div style={{marginTop: 2, display:'flex', alignItems:'center', gap: 4}}>
-                      <VariationBadge value={product.market_min_variation_since_start}/>
-                      <span style={{fontSize: 10, color:'var(--ma-fg-subtle)'}}>início</span>
+              <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap: 0}}>
+                {[
+                  { label: 'Menor preço', value: cmp.min_price, color: 'var(--ma-success)', variation: product.market_min_variation_since_start },
+                  { label: 'Preço médio', value: cmp.average_price, color: 'var(--ma-fg-strong)', variation: null },
+                  { label: 'Maior preço', value: cmp.max_price, color: 'var(--ma-danger)', variation: null },
+                ].map(({ label, value, color, variation }, i) => (
+                  <div key={label} style={{
+                    padding: '8px 12px',
+                    borderLeft: i > 0 ? '1px solid var(--ma-border)' : 'none',
+                  }}>
+                    <div style={{fontSize: 10, fontWeight: 700, letterSpacing:'0.06em', textTransform:'uppercase', color:'var(--ma-fg-subtle)', marginBottom: 4}}>
+                      {label}
                     </div>
-                  )}
-                </div>
-                <div>
-                  <span className="ma-meta">maior</span>
-                  <div style={{fontFamily:'var(--ma-font-mono)', color:'var(--ma-danger)', fontWeight: 600}}>{brl(cmp.max_price)}</div>
-                </div>
-                <div style={{marginLeft: 'auto'}}>
-                  <span className="ma-meta">rodada</span>
-                  <div style={{fontFamily:'var(--ma-font-mono)', color:'var(--ma-fg-strong)', fontWeight: 600, textTransform: 'lowercase'}}>{cmp.run_status || '—'} · {cmp.valid_competitors_count || 0}/{(cmp.participants_count || 1) - 1}</div>
-                </div>
+                    <div style={{fontFamily:'var(--ma-font-mono)', fontSize: 17, fontWeight: 700, color, letterSpacing:'-0.01em'}}>
+                      {brl(value)}
+                    </div>
+                    {variation != null && (
+                      <div style={{marginTop: 4}}>
+                        <Tooltip content="Variação do menor preço de mercado desde o início do monitoramento deste produto.">
+                          <VariationBadge value={variation}/>
+                        </Tooltip>
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             </>
           ) : (
@@ -270,11 +325,16 @@ function ProductDetail({ product, onBack, onRefresh }) {
               <div style={{marginTop: 8}}>Comparação ainda não calculada para este produto.</div>
             </div>
           )}
+
+          {/* Zona 3 — Histórico do monitoramento */}
           <div className="ma-divider"/>
-          <div style={{marginBottom: 8}}>
+          <div style={{marginBottom: 6}}>
             <span style={{fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ma-fg-subtle)'}}>Histórico do monitoramento</span>
+            <div style={{fontSize: 11, color:'var(--ma-fg-subtle)', marginTop: 3}}>
+              Preço do produto comparado ao menor preço e à média do mercado desde a primeira coleta.
+            </div>
           </div>
-          <PriceChart series={[
+          <PriceChart height={280} series={[
             { id: 'product', label: 'Seu produto', color: '#FF7A1A', data: product.product_series || [] },
             ...(product.market_min_series && product.market_min_series.length >= 2 ? [{ id: 'market_min', label: 'Menor preço', color: '#2DD4BF', data: product.market_min_series }] : []),
             ...(product.market_avg_series && product.market_avg_series.length >= 2 ? [{ id: 'market_avg', label: 'Preço médio', color: '#818CF8', data: product.market_avg_series }] : []),
@@ -328,19 +388,21 @@ function ProductDetail({ product, onBack, onRefresh }) {
                     <div className="ma-comp-seen">coletado {c.last_checked_at} · {gap != null ? (isBelow ? 'abaixo do seu preço' : 'acima do seu preço') : '—'}</div>
                   </div>
                   <div className="ma-comp-price">{brl(c.current_price)}</div>
-                  <div>
+                  <Tooltip content="Variação do preço deste concorrente desde a primeira coleta registrada.">
                     <VariationBadge value={c.variation_since_start}/>
-                    <div style={{fontSize: 10, color:'var(--ma-fg-subtle)', marginTop: 2}}>desde o início</div>
-                  </div>
-                  <div className={`ma-comp-diff ${isBelow ? 'above' : 'below'}`}>
-                    {gap != null ? (
-                      <>
-                        {gap > 0 ? '+' : '−'}{brl(Math.abs(gap)).replace('R$ ', 'R$ ')}
-                        <div style={{fontSize: 10, opacity: 0.7}}>{gapPct != null ? `${gapPct > 0 ? '+' : '−'}${Math.abs(gapPct).toFixed(1).replace('.', ',')}%` : ''}</div>
-                        <div style={{fontSize: 9, color:'var(--ma-fg-subtle)', marginTop: 1}}>gap competitivo</div>
-                      </>
-                    ) : '—'}
-                  </div>
+                  </Tooltip>
+                  <Tooltip content={gap != null
+                    ? `Diferença em relação ao seu produto · ${isBelow ? `concorrente ${gapPct != null ? Math.abs(gapPct).toFixed(1).replace('.', ',') : '?'}% mais barato` : `concorrente ${gapPct != null ? Math.abs(gapPct).toFixed(1).replace('.', ',') : '?'}% mais caro`}`
+                    : 'Sem dados de gap disponíveis'}>
+                    <div className={`ma-comp-diff ${isBelow ? 'above' : 'below'}`}>
+                      {gap != null ? (
+                        <>
+                          {gap > 0 ? '+' : '−'}{brl(Math.abs(gap)).replace('R$ ', 'R$ ')}
+                          <div style={{fontSize: 10, opacity: 0.7}}>{gapPct != null ? `${gapPct > 0 ? '+' : '−'}${Math.abs(gapPct).toFixed(1).replace('.', ',')}%` : ''}</div>
+                        </>
+                      ) : '—'}
+                    </div>
+                  </Tooltip>
                   <div style={{display:'flex', gap: 4, justifyContent:'flex-end'}}>
                     <IconButton name="external" size="sm" title="Ver anúncio" onClick={() => window.open(c.url_original, '_blank')}/>
                     <IconButton name="trash" size="sm" title="Excluir concorrente" onClick={() => deleteCompetitor(c.id)}/>

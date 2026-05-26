@@ -22,6 +22,7 @@ function mapProduct(p) {
     last_checked_at: relativeTime(p.last_checked_at),
     last_successful_collection_at_raw: p.last_successful_collection_at || null,
     consecutive_failures: p.consecutive_failures,
+    thumbnail_url: p.thumbnail_url ?? null,
     icon: inferIcon(p.name),
     history: [],
     latest_comparison: p.latest_comparison ? mapComparison(p.latest_comparison) : null,

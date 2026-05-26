@@ -138,6 +138,7 @@ async def batch_reference_indicators(
             "variation_all": float((preco_atual - primeiro) / primeiro * 100) if primeiro > 0 else None,
             "previous_price": precos_asc[-2][0] if len(precos_asc) >= 2 else None,
             "sparkline": [float(p) for p, _ in precos_asc[-30:]],
+            "thumbnail_url": next((r.thumbnail_url for r in recs if r.thumbnail_url), None),
         }
 
     return out
@@ -271,6 +272,32 @@ async def compute_competitor_summaries(
         })
 
     return summaries
+
+
+async def batch_market_avg_sparkline(
+    session: AsyncSession,
+    monitored_ids: list[uuid.UUID],
+) -> dict[uuid.UUID, list[float]]:
+    """Últimos 30 pontos do average_price de mercado por produto (1 query batch).
+
+    Usado na listagem para renderizar sparkline de tendência de mercado sem N+1.
+    """
+    if not monitored_ids:
+        return {}
+
+    resultado = await session.execute(
+        select(Comparison.monitored_id, Comparison.average_price)
+        .where(Comparison.monitored_id.in_(monitored_ids))
+        .order_by(Comparison.monitored_id, Comparison.calculated_at.desc())
+    )
+    rows = list(resultado.all())
+
+    agrupados: dict = defaultdict(list)
+    for mid, avg_price in rows:
+        if len(agrupados[mid]) < 30:
+            agrupados[mid].append(float(avg_price))
+
+    return {mid: list(reversed(agrupados.get(mid, []))) for mid in monitored_ids}
 
 
 async def compute_market_variation_24h(

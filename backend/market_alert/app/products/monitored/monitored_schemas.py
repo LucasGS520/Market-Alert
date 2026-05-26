@@ -40,10 +40,12 @@ class MonitoredProductRead(BaseModel):
     created_at: datetime
 
     # Indicadores temporais calculados pelo backend a partir do PriceHistory
+    thumbnail_url: str | None = None
     variation_24h: float | None = None
     variation_all: float | None = None
     previous_price: Decimal | None = None
     sparkline: list[float] = Field(default_factory=list)
+    market_avg_sparkline: list[float] = Field(default_factory=list)
 
     @computed_field
     @property

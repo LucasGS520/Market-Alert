@@ -12,6 +12,7 @@ from app.infra.database import get_session
 from app.comparison.comparison_schemas import CompetitorSummaryRead, MarketSnapshotRead
 from app.comparison.comparison_schemas import PricePoint
 from app.comparison.market_indicators_service import (
+    batch_market_avg_sparkline,
     batch_reference_indicators,
     compute_competitor_summaries,
     compute_market_series,
@@ -71,6 +72,7 @@ async def list_monitored(session: Session):
     rows = await list_products_with_comparisons(session)
     ids = [produto.id for produto, _, _ in rows]
     indicadores = await batch_reference_indicators(session, ids)
+    market_sparklines = await batch_market_avg_sparkline(session, ids)
 
     result = []
     for produto, comparacao, count in rows:
@@ -81,10 +83,12 @@ async def list_monitored(session: Session):
         item.competitors_count = count
 
         ref = indicadores.get(produto.id, {})
+        item.thumbnail_url = ref.get("thumbnail_url")
         item.variation_24h = ref.get("variation_24h")
         item.variation_all = ref.get("variation_all")
         item.previous_price = ref.get("previous_price")
         item.sparkline = ref.get("sparkline", [])
+        item.market_avg_sparkline = market_sparklines.get(produto.id, [])
 
         result.append(item)
     return result

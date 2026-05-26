@@ -1,12 +1,17 @@
 """Tarefa de orquestração de rodada de coleta.
 
 Responsável por coordenar a sequência completa:
-    1. Coletar o produto monitorado principal via collect_product.
+    1. Tentar coletar a oferta de referência (MonitoredProduct) via collect_product.
     2. Selecionar concorrentes elegíveis.
     3. Criar rodada coordenada no Redis.
     4. Enfileirar coletas de concorrentes (collector_task).
     5. Enfileirar comparação (comparison_task).
     6. Liberar o lease (collection_lease_until) ao encerrar.
+
+Falha na coleta da referência não aborta a rodada de mercado — apenas torna
+a posição da referência indisponível no snapshot (ver comparison_service.py).
+A rodada só é abortada por: produto inexistente, paused/unsupported,
+scraper completamente indisponível, ou produto deletado durante a coleta.
 
 Separada do collector_task, que fica responsável pela coleta unitária.
 """
@@ -48,11 +53,11 @@ def _liberar_lease(produto: MonitoredProduct) -> None:
     name="app.workers.orchestrator.collection_orchestrator_task",
 )
 def collection_orchestrator_task(self: Task, product_id: str) -> None:
-    """Orquestra a rodada completa: coleta principal → concorrentes → comparação.
+    """Orquestra a rodada de mercado: referência → concorrentes → comparação.
 
-    Libera collection_lease_until em todo desfecho não-retryable, permitindo
-    que o scheduler reenfileire conforme next_check_at. Em retries ativos, o
-    lease permanece para evitar duplicidade de enqueue.
+    Falha na coleta da referência não encerra a rodada — apenas torna sua
+    posição indisponível no snapshot. Libera collection_lease_until em todo
+    desfecho não-retryable para que o scheduler possa reenfileirar.
 
     Args:
         product_id: UUID do MonitoredProduct (string).
@@ -106,21 +111,28 @@ def collection_orchestrator_task(self: Task, product_id: str) -> None:
                 return
 
             coleta_ok = resultado.get("success", False)
+            reason = resultado.get("reason")
 
-            if not coleta_ok:
-                reason = resultado.get("reason")
-                if reason != "product_deleted":
-                    _liberar_lease(produto)
-                    await session.commit()
+            if not coleta_ok and reason == "product_deleted":
+                # Produto removido durante a rodada: sem âncora estrutural, abort total.
                 logger.info(
-                    "orquestrador_coleta_incompleta",
+                    "orquestrador_produto_deletado",
                     produto_id=product_id,
-                    razao=reason,
                     duracao_s=round(time.monotonic() - inicio, 2),
                 )
                 return
 
-            # ── Coleta bem-sucedida: orquestrar rodada de concorrentes ────────
+            if not coleta_ok:
+                logger.info(
+                    "orquestrador_referencia_falhou",
+                    produto_id=product_id,
+                    razao=reason,
+                    duracao_s=round(time.monotonic() - inicio, 2),
+                )
+                # Referência indisponível; o mercado continua com os concorrentes.
+                # comparison_service abortará apenas se não houver nenhuma oferta válida.
+
+            # ── Orquestrar rodada de mercado (com ou sem referência) ──────────
             await session.refresh(produto)
             preco_novo = Decimal(str(produto.current_price)) if produto.current_price else None
 
@@ -164,6 +176,7 @@ def collection_orchestrator_task(self: Task, product_id: str) -> None:
             logger.info(
                 "orquestrador_concluido",
                 produto_id=product_id,
+                referencia_coletada=coleta_ok,
                 total_concorrentes=len(concorrentes),
                 rodada_coordenada=rodada_id is not None,
                 duracao_s=round(time.monotonic() - inicio, 2),

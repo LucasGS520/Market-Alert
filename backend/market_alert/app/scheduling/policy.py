@@ -37,13 +37,15 @@ def classify_stability(
     last_price_changed_at: datetime | None,
     last_availability_changed_at: datetime | None,
     now: datetime,
+    last_market_changed_at: datetime | None = None,
 ) -> str:
-    """Classifica o nível de estabilidade do produto com base em tempo.
+    """Classifica o nível de estabilidade do mercado monitorado com base em tempo.
 
-    Semântica temporal (substitui a anterior counter-based):
-    - unstable:    preço alterado há menos de 24h, ou nunca registrado
-    - stable:      preço inalterado entre 24h e 48h
-    - very_stable: preço inalterado há mais de 48h
+    Considera o evento mais recente entre mudança da oferta de referência e
+    mudança do mercado (qualquer alteração detectada no snapshot de comparação):
+    - unstable:    mudança há menos de 24h, ou nenhuma mudança registrada
+    - stable:      sem mudança entre 24h e 48h
+    - very_stable: sem mudança há mais de 48h
 
     Override: mudança de disponibilidade nas últimas 24h força "unstable"
     independentemente do histórico de preço.
@@ -53,9 +55,13 @@ def classify_stability(
         if age_minutes < _AVAILABILITY_VOLATILITY_WINDOW_MINUTES:
             return "unstable"
 
-    if last_price_changed_at is None:
+    # Usa o evento mais recente entre mudança da referência e mudança de mercado
+    candidatos = [t for t in [last_price_changed_at, last_market_changed_at] if t is not None]
+    effective_changed_at = max(candidatos) if candidatos else None
+
+    if effective_changed_at is None:
         return "unstable"
-    elapsed_hours = (now - last_price_changed_at).total_seconds() / 3600
+    elapsed_hours = (now - effective_changed_at).total_seconds() / 3600
     if elapsed_hours < 24:
         return "unstable"
     if elapsed_hours < 48:

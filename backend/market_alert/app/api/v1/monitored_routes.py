@@ -5,10 +5,19 @@ from urllib.parse import urlparse
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infra.database import get_session
-from app.comparison.comparison_schemas import ComparisonRead
+from app.comparison.comparison_schemas import CompetitorSummaryRead, MarketSnapshotRead
+from app.comparison.comparison_schemas import PricePoint
+from app.comparison.market_indicators_service import (
+    batch_market_avg_sparkline,
+    batch_reference_indicators,
+    compute_competitor_summaries,
+    compute_market_series,
+    compute_reference_series,
+)
 
 from app.products.monitored.monitored_model import MonitoredProduct
 from app.products.monitored.monitored_schemas import (
@@ -61,12 +70,26 @@ async def create_monitored(body: MonitoredProductCreate, session: Session) -> Cr
 @router.get("/", response_model=list[MonitoredProductDetail])
 async def list_monitored(session: Session):
     rows = await list_products_with_comparisons(session)
+    ids = [produto.id for produto, _, _ in rows]
+    indicadores = await batch_reference_indicators(session, ids)
+    market_sparklines = await batch_market_avg_sparkline(session, ids)
+
     result = []
     for produto, comparacao, count in rows:
         item = MonitoredProductDetail.model_validate(produto)
         if comparacao:
-            item.latest_comparison = ComparisonRead.model_validate(comparacao)
+            snapshot = MarketSnapshotRead.model_validate(comparacao)
+            item.latest_comparison = snapshot
         item.competitors_count = count
+
+        ref = indicadores.get(produto.id, {})
+        item.thumbnail_url = ref.get("thumbnail_url")
+        item.variation_24h = ref.get("variation_24h")
+        item.variation_all = ref.get("variation_all")
+        item.previous_price = ref.get("previous_price")
+        item.sparkline = ref.get("sparkline", [])
+        item.market_avg_sparkline = market_sparklines.get(produto.id, [])
+
         result.append(item)
     return result
 
@@ -74,8 +97,6 @@ async def list_monitored(session: Session):
 @router.get("/search", response_model=list[SearchResult])
 async def search_monitored(q: str, session: Session) -> list[SearchResult]:
     """Busca produtos monitorados e concorrentes por nome ou URL (mínimo 2 caracteres)."""
-    from sqlalchemy import or_
-
     term = q.strip()
     if len(term) < 2:
         return []
@@ -134,8 +155,46 @@ async def get_monitored(product_id: uuid.UUID, session: Session) -> MonitoredPro
     produto, ultima_comparacao = await get_with_latest_comparison(session, product_id)
 
     detalhe = MonitoredProductDetail.model_validate(produto)
+
+    ref = await compute_reference_series(session, product_id)
+    detalhe.product_series = [PricePoint(**p) for p in ref.get("product_series", [])]
+    detalhe.initial_price = ref.get("initial_price")
+    detalhe.previous_price = ref.get("previous_price")
+    detalhe.variation_since_start = ref.get("variation_since_start")
+    detalhe.variation_since_previous = ref.get("variation_since_previous")
+    detalhe.trend_since_start = ref.get("trend_since_start", "insufficient_data")
+
     if ultima_comparacao:
-        detalhe.latest_comparison = ComparisonRead.model_validate(ultima_comparacao)
+        market = await compute_market_series(session, product_id)
+        competitors = await compute_competitor_summaries(
+            session, product_id, reference_price=produto.current_price
+        )
+
+        snapshot = MarketSnapshotRead.model_validate(ultima_comparacao)
+        snapshot.market_min_series = [PricePoint(**p) for p in market.get("market_min_series", [])]
+        snapshot.market_avg_series = [PricePoint(**p) for p in market.get("market_avg_series", [])]
+        snapshot.market_min_current = market.get("market_min_current")
+        snapshot.market_min_initial = market.get("market_min_initial")
+        snapshot.market_min_variation_since_start = market.get("market_min_variation_since_start")
+        snapshot.market_avg_current = market.get("market_avg_current")
+        snapshot.market_avg_initial = market.get("market_avg_initial")
+        snapshot.market_avg_variation_since_start = market.get("market_avg_variation_since_start")
+        snapshot.competitors = [
+            CompetitorSummaryRead(
+                id=c["id"],
+                name=c.get("name"),
+                current_price=c.get("current_price"),
+                initial_price=c.get("initial_price"),
+                variation_since_start=c.get("variation_since_start"),
+                gap_vs_product=c.get("gap_vs_product"),
+                gap_vs_product_percent=c.get("gap_vs_product_percent"),
+                status=c.get("status"),
+                thumbnail_url=c.get("thumbnail_url"),
+            )
+            for c in competitors
+        ]
+        detalhe.latest_comparison = snapshot
+
     return detalhe
 
 

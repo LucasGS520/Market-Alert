@@ -1,14 +1,25 @@
 # Glossario e Nomes Canonicos
 
-Versao: 1.0
+Versao: 1.1
 
 ## Entidades
 
-- Produto monitorado (`MonitoredProduct`): produto principal acompanhado pelo usuario.
-- Concorrente (`Competitor`): produto usado para comparacao competitiva contra um produto monitorado.
-- Historico de preco (`PriceHistory`): registro duravel de uma coleta.
-- Comparacao (`Comparison`): snapshot competitivo persistido depois de coleta ou recalculo.
-- Log de notificacao (`NotificationLog`): tentativa duravel de entrega de alerta.
+- Produto monitorado (`MonitoredProduct`): ancora de identidade, ciclo de vida e contexto do usuario. Nao e a fonte unica da verdade operacional — e o ponto de entrada do dominio, nao o decisor de mercado.
+- Concorrente (`Competitor`): fonte de formacao do mercado vinculada a um produto monitorado. Nao e apendice do produto: e participante ativo do mercado observado.
+- Historico de preco (`PriceHistory`): registro duravel e factual de cada coleta. Base para calculo de indicadores temporais.
+- Comparacao (`Comparison`): snapshot de mercado persistido apos cada rodada de coleta. Contem dados do mercado consolidado e, condicionalmente, a posicao da oferta de referencia nesse mercado.
+- Log de notificacao (`NotificationLog`): tentativa duravel de entrega de alerta. Consequencia do snapshot, nunca origem.
+
+## Conceitos de Mercado
+
+- Oferta de referencia: o produto monitorado considerado como participante do mercado. Sua participacao e condicional — so entra no snapshot quando `status == active`, `is_available == True` e `current_price != None`. Quando ausente, o mercado ainda pode existir.
+- Estado de mercado: conjunto derivado de preco minimo, maximo, medio, contagem de participantes e status da rodada. Calculado sempre que houver pelo menos uma oferta valida (referencia ou concorrente). Representado pelos campos de mercado do `Comparison`.
+- Mercado consolidado: o estado de mercado de uma rodada especifica, pronto para ser usado como base de decisao operacional (agendamento, comparacao, alerta).
+- Snapshot elegivel: um `Comparison` cujo `run_status` e `complete` e `valid_competitors_count >= notification_min_quorum`. Apenas snapshots elegiveis geram notificacoes.
+- Rodada degradada: rodada cujo `run_status` e `partial`, `no_competitors` ou `expired`. O snapshot e persistido para auditoria, mas o pipeline de notificacao e bloqueado.
+- Sinal de alerta: sinal tecnico derivado da comparacao de dois snapshots (`price_drop`, `price_rise`, `status_changed`, `ranking_changed`, `market_min_changed`). Multiplos sinais sao consolidados em um unico alerta publico.
+- Ciclo de vida do produto: conjunto de transicoes de status do produto monitorado (`pending`, `active`, `unavailable`, `error`, `paused`, `unsupported`). Controlado pela coleta e pelo usuario, nao pelo mercado.
+- Decisao operacional: acao tomada com base no estado de mercado — agendamento da proxima coleta, elegibilidade de notificacao, calculo de tendencia e estabilidade. Distinta da gestao do ciclo de vida do produto.
 
 ## Estados de produto e concorrente
 
@@ -60,6 +71,14 @@ Versao: 1.0
 
 - `mercadolivre`: unico marketplace oficialmente suportado.
 - Outros dominios devem ser tratados como nao suportados ate existir adapter validado e ADR aprovada.
+
+## Politica de Decisao
+
+O produto monitorado governa: identidade (nome, URL), ciclo de vida (status, pause/resume), contexto de navegacao e auditoria.
+
+O mercado consolidado governa: proxima checagem (via estabilidade de mercado), elegibilidade de notificacao (quorum, run_status), calculo de tendencia e alertas economicos.
+
+Regra de separacao: nenhuma camada deve usar o estado interno do produto monitorado para tomar decisoes que pertencem ao mercado. O produto fornece a ancora; o snapshot fornece a verdade operacional.
 
 ## Estado duravel e operacional
 

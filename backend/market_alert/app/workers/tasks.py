@@ -28,6 +28,7 @@ Nota sobre async dentro do Celery:
 
 import time
 import uuid
+from datetime import datetime, timezone
 from decimal import Decimal
 
 import structlog
@@ -71,7 +72,10 @@ class _AlertDecision:
 def _decide_alert(sinais: list[str]) -> _AlertDecision | None:
     """N sinais técnicos → 1 decisão de alerta público (ou None para não notificar).
 
-    Prioridade: price_drop/rise > competitive_position
+    Prioridade: price_drop/rise > competitive_position > market_alert.
+    Sinais da oferta de referência e sinais de mercado são tratados como classes
+    distintas: reference signals → competitive_position_alert;
+    market-only signals → market_alert.
     """
     if not sinais:
         return None
@@ -80,8 +84,10 @@ def _decide_alert(sinais: list[str]) -> _AlertDecision | None:
         return _AlertDecision("price_drop_alert", sinais)
     if "price_rise" in sinal_set:
         return _AlertDecision("price_rise_alert", sinais)
-    if sinal_set & {"status_changed", "ranking_changed", "market_min_changed"}:
+    if sinal_set & {"status_changed", "ranking_changed"}:
         return _AlertDecision("competitive_position_alert", sinais)
+    if "market_min_changed" in sinal_set:
+        return _AlertDecision("market_alert", sinais)
     return None
 
 
@@ -336,6 +342,10 @@ def comparison_task(
                         )
                         return
 
+                    # Snapshot elegível para notificação: evento econômico confirmado
+                    produto.last_market_changed_at = datetime.now(timezone.utc)
+                    await session.commit()
+
                     preco_anterior = Decimal(old_price) if old_price else None
                     preco_novo = Decimal(new_price) if new_price else None
                     rank_old: int | None = comparacao_anterior.ranking if comparacao_anterior else None
@@ -352,8 +362,14 @@ def comparison_task(
                         if variacao_pct >= _settings.notification_delta_percent:
                             sinais.append("price_drop" if preco_novo < preco_anterior else "price_rise")
 
-                    # Sinal 2: mudança de status competitivo
-                    if status_anterior and comparacao.status != status_anterior:
+                    # Sinal 2: mudança de status competitivo da oferta de referência.
+                    # Apenas quando ambos os snapshots têm referência disponível — evita
+                    # disparar "status_changed" quando a referência simplesmente ficou indisponível.
+                    if (
+                        status_anterior is not None
+                        and comparacao.status is not None
+                        and comparacao.status != status_anterior
+                    ):
                         sinais.append("status_changed")
 
                     # Sinal 3: mudança de ranking (apenas se relevante)

@@ -36,31 +36,47 @@ O sistema opera como uma pipeline assincrona:
 
 ## Rodada coordenada
 
-1. A coleta bem-sucedida do produto principal cria uma rodada em Redis quando existem concorrentes elegiveis.
-2. Chave: `collection_run:{run_id}`.
-3. Cada concorrente recebe `collector_task(competitor_id=..., run_id=...)`.
-4. Concorrentes terminam como `done`, `failed`, `deferred` ou `skipped`.
-5. `comparison_task(..., run_id=...)` aguarda a rodada sair de `pending`.
-6. Se o TTL expirar, a comparacao segue com os dados disponiveis e status degradado.
+1. O `collection_orchestrator_task` tenta coletar a oferta de referencia (MonitoredProduct).
+2. Falha na coleta da referencia **nao aborta** a rodada — apenas torna sua posicao indisponivel no snapshot.
+3. A rodada so e abortada por: produto inexistente, `paused`/`unsupported`, scraper completamente indisponivel, ou produto deletado durante a coleta.
+4. Quando existem concorrentes elegiveis, o orquestrador cria uma rodada coordenada no Redis.
+5. Chave: `collection_run:{run_id}`.
+6. Cada concorrente recebe `collector_task(competitor_id=..., run_id=...)`.
+7. Concorrentes terminam como `done`, `failed`, `deferred` ou `skipped`.
+8. `comparison_task(..., run_id=...)` aguarda a rodada sair de `pending`.
+9. Se o TTL expirar, a comparacao segue com os dados disponiveis e status degradado.
 
 ## Comparacao
 
-1. `calculate_comparison` valida produto principal.
-2. Produto sem preco, inativo ou indisponivel aborta comparacao.
-3. Concorrentes validos entram no calculo.
-4. Concorrentes invalidos sao ignorados, mas contam como metadado de auditoria.
-5. O snapshot registra ranking, status competitivo, preco medio, minimo, maximo e contadores.
-6. Snapshot identico dentro da janela de deduplicacao nao e persistido.
-7. Snapshot novo invalida cache de comparacao.
+O snapshot representa o **mercado monitorado**, nao apenas o produto monitorado.
+
+1. `calculate_comparison` verifica a ancora estrutural (MonitoredProduct).
+2. Produto inexistente ou `paused`/`unsupported` aborta a comparacao.
+3. A elegibilidade da oferta de referencia e avaliada separadamente:
+   - Referencia elegivel: `status == "active"`, `is_available == True`, `current_price != None`.
+   - Referencia inelegivel: mercado continua; `ranking`, `status` e `potential_adjustment` ficam `None` no snapshot.
+4. Zero ofertas validas no total (referencia + concorrentes) aborta a comparacao.
+5. Concorrentes validos entram no calculo de mercado.
+6. Concorrentes invalidos sao ignorados, mas contam como metadado de auditoria.
+7. O snapshot registra precos de mercado (min, max, media), posicao da referencia (quando disponivel) e contadores.
+8. `reference_available: bool` indica explicitamente se a referencia participou do snapshot.
+9. Snapshot identico dentro da janela de deduplicacao nao e persistido.
+10. Snapshot novo invalida cache de comparacao.
 
 ## Notificacao
 
-1. A comparacao calcula sinais tecnicos.
-2. Sinais sao consolidados em no maximo um alerta publico por comparacao.
-3. A notificacao e bloqueada quando a rodada e manual, degradada ou sem quorum minimo.
-4. `notification_task` entrega via ntfy se configurado.
-5. Tentativas de entrega sao registradas em PostgreSQL.
-6. Cooldown por produto e tipo de alerta e gravado em Redis.
+1. A comparacao coleta sinais tecnicos separados por classe:
+   - **Sinais da referencia**: `price_drop`, `price_rise`, `status_changed`, `ranking_changed`.
+   - **Sinais de mercado**: `market_min_changed`.
+2. Sinais sao consolidados em no maximo um alerta publico por comparacao, por classe:
+   - Sinais de preco da referencia → `price_drop_alert` ou `price_rise_alert`.
+   - Sinais de posicao da referencia → `competitive_position_alert`.
+   - Sinais de mercado sem referencia → `market_alert`.
+3. Sinais da referencia so sao coletados quando `reference_available == True`.
+4. A notificacao e bloqueada quando a rodada e manual, degradada ou sem quorum minimo.
+5. `notification_task` entrega via ntfy se configurado.
+6. Tentativas de entrega sao registradas em PostgreSQL.
+7. Cooldown por produto e tipo de alerta e gravado em Redis.
 
 ## Leitura pela UI
 
@@ -83,3 +99,10 @@ Toda mudanca organizacional deve preservar:
 - Mesmas filas e tasks.
 - Mesma separacao PostgreSQL duravel / Redis transitorio.
 - Mercado Livre como unico marketplace oficial.
+
+### Invariantes do modelo de mercado (nao regredir)
+
+- O snapshot de mercado deve ser calculado mesmo quando a oferta de referencia estiver indisponivel.
+- `ranking`, `status` e `potential_adjustment` so devem ser preenchidos quando `reference_available == True`.
+- Sinais da referencia (`status_changed`, `ranking_changed`) nao devem disparar quando `comparacao.status is None`.
+- `market_alert` e `competitive_position_alert` sao classes distintas; nao misturar causas.

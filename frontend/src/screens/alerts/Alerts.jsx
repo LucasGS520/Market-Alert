@@ -10,11 +10,11 @@ function Alerts({ notifications, products, onOpen }) {
     if (deliveryFilter !== 'all' && n.delivery_status !== deliveryFilter) return false;
     switch (filter) {
       case 'all':          return true;
-      case 'price':        return n.event_type === 'price_drop' || n.event_type === 'price_rise';
-      case 'ranking':      return n.event_type === 'ranking_change';
-      case 'market':       return n.event_type === 'market_price_drop' || n.event_type === 'market_price_rise';
-      case 'availability': return ['product_unavailable','product_available','competitor_unavailable','competitor_available'].includes(n.event_type);
-      case 'collection':   return n.event_type === 'status_change';
+      case 'price':        return n.event_type === 'price_drop_alert' || n.event_type === 'price_rise_alert';
+      case 'competitive':  return n.event_type === 'competitive_position_alert';
+      case 'market':       return n.event_type === 'market_alert';
+      case 'availability': return n.event_type === 'availability_alert';
+      case 'collection':   return n.event_type === 'error_alert';
       default: return true;
     }
   };
@@ -22,11 +22,11 @@ function Alerts({ notifications, products, onOpen }) {
 
   const filters = [
     { id: 'all',          label: 'Todos',           count: notifications.length },
-    { id: 'price',        label: 'Preço',           count: notifications.filter(n => ['price_drop','price_rise'].includes(n.event_type)).length },
-    { id: 'ranking',      label: 'Ranking',         count: notifications.filter(n => n.event_type === 'ranking_change').length },
-    { id: 'market',       label: 'Mercado',         count: notifications.filter(n => ['market_price_drop','market_price_rise'].includes(n.event_type)).length },
-    { id: 'availability', label: 'Disponibilidade', count: notifications.filter(n => ['product_unavailable','product_available','competitor_unavailable','competitor_available'].includes(n.event_type)).length },
-    { id: 'collection',   label: 'Coleta',          count: notifications.filter(n => n.event_type === 'status_change').length },
+    { id: 'price',        label: 'Preço',           count: notifications.filter(n => ['price_drop_alert','price_rise_alert'].includes(n.event_type)).length },
+    { id: 'competitive',  label: 'Competitivo',     count: notifications.filter(n => n.event_type === 'competitive_position_alert').length },
+    { id: 'market',       label: 'Mercado',         count: notifications.filter(n => n.event_type === 'market_alert').length },
+    { id: 'availability', label: 'Disponibilidade', count: notifications.filter(n => n.event_type === 'availability_alert').length },
+    { id: 'collection',   label: 'Coleta',          count: notifications.filter(n => n.event_type === 'error_alert').length },
   ];
 
   const deliveryFilters = [

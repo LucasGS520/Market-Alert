@@ -38,7 +38,6 @@ class MonitoredProduct(Base):
     next_check_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     check_interval_minutes: Mapped[int] = mapped_column(Integer, nullable=False, server_default="60")
-    consecutive_unchanged: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
 
     # ── Estado de Estabilidade ─────────────────────────────────────────────
     stability_level: Mapped[str] = mapped_column(
@@ -47,6 +46,7 @@ class MonitoredProduct(Base):
     last_price_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_significant_price_change_percent: Mapped[float | None] = mapped_column(Numeric(8, 4), nullable=True)
     last_availability_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_market_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # ── Controle Operacional de Rodada ────────────────────────────────────
     last_scheduled_delay_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)

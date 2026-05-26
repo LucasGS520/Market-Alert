@@ -94,6 +94,13 @@ def _montar_mensagem(
         mensagem = f"O produto {direcao} competitividade."
         mensagem += _contexto_competitivo(old_status, new_status, old_ranking, new_ranking, reason_codes, market_min_old, market_min_new)
 
+    elif alert_type == "market_alert":
+        titulo = f"Variação de mercado — {nome_produto}"
+        if "market_min_changed" in reason_codes and market_min_old and market_min_new:
+            mensagem = f"Menor preço do mercado: {_fmt_preco(market_min_old)} → {_fmt_preco(market_min_new)}."
+        else:
+            mensagem = "O mercado monitorado sofreu variação significativa."
+
     elif alert_type == "availability_alert":
         if "product_unavailable" in reason_codes:
             titulo = f"Produto indisponível — {nome_produto}"

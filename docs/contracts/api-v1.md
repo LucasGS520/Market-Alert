@@ -91,12 +91,13 @@ Operacoes `POST` de produto e concorrente retornam:
   "latest_comparison": {
     "id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
     "monitored_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "reference_available": true,
     "status": "attention",
     "ranking": 2,
+    "potential_adjustment": "-300.00",
     "average_price": "3150.00",
     "min_price": "2999.90",
     "max_price": "3399.00",
-    "potential_adjustment": "-300.00",
     "calculated_at": "2026-05-21T12:00:20+00:00",
     "run_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
     "run_status": "complete",
@@ -111,25 +112,45 @@ Operacoes `POST` de produto e concorrente retornam:
 
 ### GET /api/v1/comparisons/{monitored_id}
 
+Retorna `MarketSnapshotRead`: campos de mercado sempre presentes + campos da oferta de referência condicionais (`reference_available == true`) + indicadores temporais derivados.
+
 ```json
 {
   "id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
   "monitored_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "reference_available": true,
   "status": "attention",
   "ranking": 2,
+  "potential_adjustment": "-300.00",
   "average_price": "3150.00",
   "min_price": "2999.90",
   "max_price": "3399.00",
-  "potential_adjustment": "-300.00",
   "calculated_at": "2026-05-21T12:00:20+00:00",
   "run_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "run_status": "complete",
   "product_price": "3299.90",
   "participants_count": 3,
   "valid_competitors_count": 3,
-  "ignored_competitors_count": 0
+  "ignored_competitors_count": 0,
+  "variation_24h": -2.1,
+  "variation_all": 5.3,
+  "previous_price": "3370.00",
+  "sparkline": [3370.0, 3299.9],
+  "market_variation_24h": -1.2,
+  "competitors": [
+    {
+      "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+      "name": "Notebook Dell Inspiron 15 (vendedor B)",
+      "current_price": "2999.90",
+      "variation_24h": -0.5,
+      "status": "active",
+      "thumbnail_url": null
+    }
+  ]
 }
 ```
+
+Quando `reference_available == false`, os campos `status`, `ranking` e `potential_adjustment` retornam `null`.
 
 ### GET /api/v1/monitored/{id}/competitors — item da lista
 

@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, computed_field
 
-from app.comparison.comparison_schemas import ComparisonRead
+from app.comparison.comparison_schemas import ComparisonRead, MarketSnapshotRead, PricePoint
 from app.infra.config import settings
 
 
@@ -34,7 +34,18 @@ class MonitoredProductRead(BaseModel):
     consecutive_failures: int
     check_interval_minutes: int
     stability_level: str
+    last_price_changed_at: datetime | None = None
+    last_availability_changed_at: datetime | None = None
+    last_market_changed_at: datetime | None = None
     created_at: datetime
+
+    # Indicadores temporais calculados pelo backend a partir do PriceHistory
+    thumbnail_url: str | None = None
+    variation_24h: float | None = None
+    variation_all: float | None = None
+    previous_price: Decimal | None = None
+    sparkline: list[float] = Field(default_factory=list)
+    market_avg_sparkline: list[float] = Field(default_factory=list)
 
     @computed_field
     @property
@@ -53,8 +64,14 @@ class MonitoredProductRead(BaseModel):
 
 
 class MonitoredProductDetail(MonitoredProductRead):
-    latest_comparison: ComparisonRead | None = None
+    latest_comparison: MarketSnapshotRead | None = None
     competitors_count: int = 0
+    # Série temporal e indicadores "desde o início" do produto
+    product_series: list[PricePoint] = Field(default_factory=list)
+    initial_price: Decimal | None = None
+    variation_since_start: float | None = None
+    variation_since_previous: float | None = None
+    trend_since_start: str = "insufficient_data"
 
 
 class MonitoredProductPatch(BaseModel):

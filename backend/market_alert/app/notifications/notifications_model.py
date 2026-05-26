@@ -9,13 +9,23 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.infra.database import Base
 
 EventType = Enum(
-    # Alert types consolidados (uso ativo)
-    "price_drop_alert", "price_rise_alert",
-    "competitive_position_alert",   # sinais da oferta de referência
-    "market_alert",                 # sinais de mercado independentes da referência
+    # Ativos — gerados pelo pipeline atual (ver event_types.ACTIVE_TYPES)
+    "competitive_threat_alert",
+    "competitive_opportunity_alert",
+    "market_movement_alert",
+    "reference_availability_alert",
     "availability_alert",
+    # Auditoria operacional — nunca entregue ao usuário
+    "collection_health_alert",
+    # Inativos — definidos no schema, sem lógica de geração ainda
+    "competitor_movement_alert",
+    "competitor_availability_alert",
+    # Deprecated — gerados pelo pipeline antigo, podem existir no histórico
+    "price_drop_alert", "price_rise_alert",
+    "competitive_position_alert",
+    "market_alert",
     "error_alert",
-    # Valores legados (mantidos para linhas históricas)
+    # Legacy — nomes antigos sem sufixo _alert, apenas leitura histórica
     "price_drop", "price_rise", "status_change",
     "ranking_change",
     "product_unavailable", "product_available",
@@ -68,6 +78,7 @@ class NotificationLog(Base):
     run_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     run_status: Mapped[str | None] = mapped_column(String(50), nullable=True)
     participants_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    skip_reason: Mapped[str | None] = mapped_column(String(50), nullable=True)
     sent_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

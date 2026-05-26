@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infra.config import settings
 from app.infra.clients.ntfy import send_ntfy
+from app.notifications.event_types import AUDIT_ONLY_TYPES
 from app.notifications.notifications_model import NotificationLog
 from app.workers.redis import is_in_cooldown, set_cooldown
 
@@ -51,16 +52,9 @@ class NotificationPayload:
     participants_count: int | None = None
 
 
-# Prioridade de consolidação: alertas de preço prevalecem sobre posição competitiva.
-# Uma comparação gera no máximo uma notificação; o tipo de maior impacto vence.
-_STATUS_RANK = {"competitive": 0, "attention": 1, "urgent": 2}
-
-
 def _montar_mensagem(
     alert_type: str,
     nome_produto: str,
-    old_price: Decimal | None,
-    new_price: Decimal | None,
     old_status: str | None,
     new_status: str | None,
     old_ranking: int | None = None,
@@ -72,36 +66,7 @@ def _montar_mensagem(
     """Retorna (titulo, mensagem) para o alert_type dado. URL vai no header Click, não aqui."""
     reason_codes = reason_codes or []
 
-    if alert_type == "price_drop_alert":
-        titulo = f"Queda de preço — {nome_produto}"
-        mensagem = f"Preço caiu de {_fmt_preco(old_price)} para {_fmt_preco(new_price)}."
-        contexto = _contexto_competitivo(old_status, new_status, old_ranking, new_ranking, reason_codes)
-        if contexto:
-            mensagem += f"\n\nTambém houve mudança competitiva:{contexto}"
-
-    elif alert_type == "price_rise_alert":
-        titulo = f"Alta de preço — {nome_produto}"
-        mensagem = f"Preço subiu de {_fmt_preco(old_price)} para {_fmt_preco(new_price)}."
-        contexto = _contexto_competitivo(old_status, new_status, old_ranking, new_ranking, reason_codes)
-        if contexto:
-            mensagem += f"\n\nTambém houve mudança competitiva:{contexto}"
-
-    elif alert_type == "competitive_position_alert":
-        rank_anterior = _STATUS_RANK.get(old_status or "", 0)
-        rank_novo = _STATUS_RANK.get(new_status or "", 0)
-        direcao = "perdeu" if rank_novo > rank_anterior else "ganhou"
-        titulo = f"Alerta competitivo — {nome_produto}"
-        mensagem = f"O produto {direcao} competitividade."
-        mensagem += _contexto_competitivo(old_status, new_status, old_ranking, new_ranking, reason_codes, market_min_old, market_min_new)
-
-    elif alert_type == "market_alert":
-        titulo = f"Variação de mercado — {nome_produto}"
-        if "market_min_changed" in reason_codes and market_min_old and market_min_new:
-            mensagem = f"Menor preço do mercado: {_fmt_preco(market_min_old)} → {_fmt_preco(market_min_new)}."
-        else:
-            mensagem = "O mercado monitorado sofreu variação significativa."
-
-    elif alert_type == "availability_alert":
+    if alert_type == "availability_alert":
         if "product_unavailable" in reason_codes:
             titulo = f"Produto indisponível — {nome_produto}"
             mensagem = "O produto ficou indisponível."
@@ -109,35 +74,55 @@ def _montar_mensagem(
             titulo = f"Produto disponível — {nome_produto}"
             mensagem = "O produto voltou a ficar disponível."
 
-    elif alert_type == "error_alert":
-        titulo = f"Problema com Coleta — {nome_produto}"
-        mensagem = "Ocorreu um erro com a coleta do produto."
+    elif alert_type == "competitive_threat_alert":
+        titulo = f"Ameaça competitiva — {nome_produto}"
+        if "ranking_worsened" in reason_codes and old_ranking is not None and new_ranking is not None:
+            mensagem = f"Você perdeu posição no ranking ({old_ranking}º → {new_ranking}º)."
+            if old_status and new_status and old_status != new_status:
+                mensagem += f" Status: {old_status} → {new_status}."
+        elif "status_worsened" in reason_codes and old_status and new_status:
+            mensagem = f"Status competitivo piorou: {old_status} → {new_status}."
+            if old_ranking is not None and new_ranking is not None and old_ranking != new_ranking:
+                mensagem += f" Ranking: {old_ranking}º → {new_ranking}º."
+        elif "gap_increased" in reason_codes and market_min_new:
+            mensagem = f"Seu gap contra o menor preço do mercado aumentou. Menor preço: {_fmt_preco(market_min_new)}."
+        else:
+            mensagem = "Sua posição competitiva no mercado piorou."
+
+    elif alert_type == "competitive_opportunity_alert":
+        titulo = f"Oportunidade competitiva — {nome_produto}"
+        if "market_became_less_aggressive" in reason_codes and market_min_new:
+            mensagem = f"O mercado ficou menos agressivo. Menor preço subiu para {_fmt_preco(market_min_new)}."
+        elif "ranking_improved" in reason_codes and old_ranking is not None and new_ranking is not None:
+            mensagem = f"Você ganhou posição no ranking ({old_ranking}º → {new_ranking}º)."
+        elif "status_improved" in reason_codes and old_status and new_status:
+            mensagem = f"Status competitivo melhorou: {old_status} → {new_status}."
+        elif "gap_decreased" in reason_codes and market_min_new:
+            mensagem = f"Seu gap contra o menor preço do mercado diminuiu. Menor preço: {_fmt_preco(market_min_new)}."
+        else:
+            mensagem = "Sua posição competitiva no mercado melhorou."
+
+    elif alert_type == "market_movement_alert":
+        titulo = f"Movimento de mercado — {nome_produto}"
+        if market_min_old and market_min_new:
+            direcao = "caiu" if market_min_new < market_min_old else "subiu"
+            mensagem = f"Menor preço do mercado {direcao}: {_fmt_preco(market_min_old)} → {_fmt_preco(market_min_new)}."
+        else:
+            mensagem = "O mercado sofreu variação significativa."
+
+    elif alert_type == "reference_availability_alert":
+        if "reference_became_unavailable" in reason_codes:
+            titulo = f"Referência indisponível — {nome_produto}"
+            mensagem = "O produto de referência ficou indisponível no mercado."
+        else:
+            titulo = f"Referência disponível — {nome_produto}"
+            mensagem = "O produto de referência voltou a ficar disponível."
 
     else:
         titulo = f"Alerta — {nome_produto}"
         mensagem = f"Tipo: {alert_type}"
 
     return titulo, mensagem
-
-
-def _contexto_competitivo(
-    old_status: str | None,
-    new_status: str | None,
-    old_ranking: int | None,
-    new_ranking: int | None,
-    reason_codes: list[str],
-    market_min_old: Decimal | None = None,
-    market_min_new: Decimal | None = None,
-) -> str:
-    """Monta linhas de contexto competitivo para incluir na mensagem."""
-    linhas: list[str] = []
-    if "status_changed" in reason_codes and old_status and new_status and old_status != new_status:
-        linhas.append(f"\nStatus: {old_status} → {new_status}")
-    if "ranking_changed" in reason_codes and old_ranking is not None and new_ranking is not None:
-        linhas.append(f"\nRanking: {old_ranking}º → {new_ranking}º")
-    if "market_min_changed" in reason_codes and market_min_old and market_min_new:
-        linhas.append(f"\nMenor preço de mercado: {_fmt_preco(market_min_old)} → {_fmt_preco(market_min_new)}")
-    return "".join(linhas)
 
 
 def _registrar_tentativa(
@@ -237,6 +222,11 @@ async def send_notification(
     Raises:
         RetryableDeliveryError: se o envio falhou com erro retryable.
     """
+    if payload.alert_type in AUDIT_ONLY_TYPES:
+        raise ValueError(
+            f"Tipo '{payload.alert_type}' é exclusivo de auditoria e não pode ser entregue via ntfy."
+        )
+
     if not settings.ntfy_topic:
         logger.debug(
             "notificacao_ignorada_ntfy_desabilitado",
@@ -248,17 +238,17 @@ async def send_notification(
     # Cooldown é granular por (produto × tipo de alerta): queda de preço não bloqueia
     # alerta de disponibilidade do mesmo produto, e vice-versa.
     if is_in_cooldown(redis, payload.monitored_id, payload.alert_type):
-        logger.debug(
-            "notificacao_cooldown_ativo",
+        logger.info(
+            "notificacao_suprimida",
             produto_id=str(payload.monitored_id),
             alert_type=payload.alert_type,
+            skip_reason="cooldown_active",
         )
         return
 
     nome_produto = product_name or product_url
     titulo, mensagem = _montar_mensagem(
         payload.alert_type, nome_produto,
-        payload.old_price, payload.new_price,
         payload.old_status, payload.new_status,
         payload.old_ranking, payload.new_ranking,
         payload.market_min_old, payload.market_min_new,
@@ -267,10 +257,11 @@ async def send_notification(
 
     if await _ja_entregue(session, payload.comparison_id, payload.alert_type):
         logger.info(
-            "notificacao_ja_entregue",
+            "notificacao_suprimida",
             produto_id=str(payload.monitored_id),
             alert_type=payload.alert_type,
             comparison_id=str(payload.comparison_id) if payload.comparison_id else None,
+            skip_reason="deduplicated",
         )
         return
 
@@ -317,6 +308,36 @@ async def send_notification(
         await session.commit()
         if retryable:
             raise RetryableDeliveryError(str(exc)) from exc
+
+
+# ── Auditoria ──────────────────────────────────────────────────────────────────
+
+async def registrar_supressao(
+    session: AsyncSession,
+    monitored_id: uuid.UUID,
+    comparison_id: uuid.UUID | None,
+    skip_reason: str,
+    run_id: str | None = None,
+    run_status: str | None = None,
+) -> None:
+    """Registra supressão pré-decisão como delivery_status='skipped'.
+
+    Usado quando o pipeline decide não calcular sinais (rodada degradada,
+    quorum insuficiente). O event_type é collection_health_alert porque a
+    causa é sempre operacional, não competitiva. O caller é responsável pelo
+    session.commit() após a chamada.
+    """
+    session.add(NotificationLog(
+        monitored_id=monitored_id,
+        comparison_id=comparison_id,
+        event_type="collection_health_alert",
+        delivery_status="skipped",
+        message=f"Notificação suprimida: {skip_reason}",
+        attempt_count=0,
+        skip_reason=skip_reason,
+        run_id=run_id,
+        run_status=run_status,
+    ))
 
 
 # ── Consultas ──────────────────────────────────────────────────────────────────

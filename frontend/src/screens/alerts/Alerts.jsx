@@ -5,28 +5,23 @@ function Alerts({ notifications, products, onOpen }) {
   const [filter, setFilter] = React.useState('all');
   const [deliveryFilter, setDeliveryFilter] = React.useState('all');
 
+  // TYPE_GROUPS definido em src/constants/notificationTypes.js (carregado antes via script tag).
+
   const filterMatches = (n) => {
     // Filtros nao alteram a consulta: operam sobre o lote carregado pelo dashboard.
     if (deliveryFilter !== 'all' && n.delivery_status !== deliveryFilter) return false;
-    switch (filter) {
-      case 'all':          return true;
-      case 'price':        return n.event_type === 'price_drop_alert' || n.event_type === 'price_rise_alert';
-      case 'competitive':  return n.event_type === 'competitive_position_alert';
-      case 'market':       return n.event_type === 'market_alert';
-      case 'availability': return n.event_type === 'availability_alert';
-      case 'collection':   return n.event_type === 'error_alert';
-      default: return true;
-    }
+    if (filter === 'all') return true;
+    const group = TYPE_GROUPS[filter];
+    return group ? group.includes(n.event_type) : true;
   };
   const visible = notifications.filter(filterMatches);
 
   const filters = [
     { id: 'all',          label: 'Todos',           count: notifications.length },
-    { id: 'price',        label: 'Preço',           count: notifications.filter(n => ['price_drop_alert','price_rise_alert'].includes(n.event_type)).length },
-    { id: 'competitive',  label: 'Competitivo',     count: notifications.filter(n => n.event_type === 'competitive_position_alert').length },
-    { id: 'market',       label: 'Mercado',         count: notifications.filter(n => n.event_type === 'market_alert').length },
-    { id: 'availability', label: 'Disponibilidade', count: notifications.filter(n => n.event_type === 'availability_alert').length },
-    { id: 'collection',   label: 'Coleta',          count: notifications.filter(n => n.event_type === 'error_alert').length },
+    { id: 'competitive',  label: 'Competitivo',     count: notifications.filter(n => TYPE_GROUPS.competitive.includes(n.event_type)).length },
+    { id: 'market',       label: 'Mercado',         count: notifications.filter(n => TYPE_GROUPS.market.includes(n.event_type)).length },
+    { id: 'availability', label: 'Disponibilidade', count: notifications.filter(n => TYPE_GROUPS.availability.includes(n.event_type)).length },
+    { id: 'collection',   label: 'Coleta',          count: notifications.filter(n => TYPE_GROUPS.collection.includes(n.event_type)).length },
   ];
 
   const deliveryFilters = [

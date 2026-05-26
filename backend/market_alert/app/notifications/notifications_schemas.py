@@ -30,4 +30,5 @@ class NotificationLogRead(BaseModel):
     run_id: str | None
     run_status: str | None
     participants_count: int | None
+    skip_reason: str | None
     sent_at: datetime

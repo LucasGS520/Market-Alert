@@ -1,100 +1,106 @@
-# Contrato de Notificacoes
+# Contrato de Notificações
 
-Versao: 1.0  
-Proprietario logico: `backend/market_alert/app/notifications` e `backend/market_alert/app/workers/tasks.py`  
-Consumidores: frontend, operadores, ntfy.
+Versão: 2.0  
+Proprietário lógico: `app/notifications/` + `app/workers/tasks.py`  
+Fonte de verdade de tipos: `app/notifications/event_types.py` (backend) e `src/constants/notificationTypes.js` (frontend)
 
-## Quando gera alerta
+---
 
-Eventos que podem gerar notificacao:
+## Taxonomia de tipos
 
-- `price_drop_alert`: preco do produto monitorado caiu pelo menos `NOTIFICATION_DELTA_PERCENT`.
-- `price_rise_alert`: preco do produto monitorado subiu pelo menos `NOTIFICATION_DELTA_PERCENT`.
-- `competitive_position_alert`: mudanca de status competitivo ou ranking da oferta de referencia. Exige `reference_available == True`.
-- `market_alert`: menor preco de mercado variou acima do threshold, sem sinal da oferta de referencia. Pode ocorrer mesmo quando a referencia esta indisponivel.
-- `availability_alert`: produto monitorado mudou de disponivel para indisponivel ou vice-versa. Disparado pelo `collector_task`, independente do pipeline de comparacao.
+Os tipos são agrupados em cinco categorias. Somente tipos **ACTIVE** podem ser entregues via ntfy.
+A fonte de verdade em código é `app/notifications/event_types.py`.
 
-Prioridade de consolidacao por comparacao (no maximo um alerta):
+### ACTIVE — gerados pelo pipeline atual
 
-1. Queda de preco (`price_drop_alert`).
-2. Alta de preco (`price_rise_alert`).
-3. Posicao competitiva (`competitive_position_alert`).
-4. Variacao de mercado (`market_alert`).
+| Tipo | Gerado em | Descrição |
+|------|-----------|-----------|
+| `competitive_threat_alert` | `_decide_alert()` em `tasks.py` | Posição competitiva piorou (ranking, status ou gap) |
+| `competitive_opportunity_alert` | `_decide_alert()` em `tasks.py` | Posição melhorou ou mercado ficou menos agressivo |
+| `market_movement_alert` | `_decide_alert()` em `tasks.py` | Menor preço de mercado mudou sem impacto direto na posição |
+| `reference_availability_alert` | `_decide_alert()` em `tasks.py` | Produto de referência ficou disponível ou indisponível |
+| `availability_alert` | `collector_task` direto | Produto monitorado mudou disponibilidade |
 
-Uma comparacao gera no maximo um alerta consolidado. `availability_alert` e independente e nao participa desta consolidacao.
+### DEPRECATED — pipeline antigo, não gerados hoje
 
-## Quando nao gera alerta
+Podem existir em `notification_logs` como histórico. Nenhum caminho em `tasks.py` os produz hoje.
+`send_notification()` os aceita (não são `AUDIT_ONLY`), mas nunca chegam lá na prática.
 
-Nao enviar notificacao quando:
+`price_drop_alert`, `price_rise_alert`, `competitive_position_alert`, `market_alert`, `error_alert`
 
-- `ntfy_topic` nao esta configurado.
-- `comparison_task` foi disparada em fluxo `manual`.
-- `run_status` e `partial`, `expired` ou `no_competitors`.
-- `valid_competitors_count < NOTIFICATION_MIN_QUORUM`.
-- Cooldown por produto e tipo de alerta esta ativo.
-- Ja existe entrega `sent` para o mesmo `comparison_id` e `alert_type`.
-- A comparacao foi deduplicada.
-- Nao houve sinais tecnicos suficientes.
-- O produto principal esta inelegivel para comparacao.
+### AUDIT_ONLY — nunca entregue ao usuário
+
+| Tipo | Gerado por | Descrição |
+|------|-----------|-----------|
+| `collection_health_alert` | `registrar_supressao()` | Marcador de supressão pré-decisão (rodada degradada, quorum insuficiente) |
+
+`send_notification()` rejeita qualquer tentativa de entregar `AUDIT_ONLY_TYPES` — levanta `ValueError`.
+
+### INACTIVE — definidos no schema DB, sem lógica de geração ainda
+
+| Tipo | Previsto para |
+|------|--------------|
+| `competitor_movement_alert` | Tier 2: concorrente específico mudou posição |
+| `competitor_availability_alert` | Tier 2: concorrente específico mudou disponibilidade |
+
+### LEGACY — apenas leitura histórica
+
+`price_drop`, `price_rise`, `status_change`, `ranking_change`, `product_unavailable`, `product_available`, `market_price_drop`, `market_price_rise`, `competitor_unavailable`, `competitor_available`.
+
+Não são gerados pelo pipeline atual. Existem apenas para não quebrar queries sobre dados históricos.
+
+---
+
+## Hierarquia de sinais → alerta
+
+`comparison_task` coleta sinais técnicos da comparação e aplica a hierarquia abaixo. **Uma comparação gera no máximo um alerta público** — o sinal de maior impacto competitivo vence.
+
+| Sinal técnico | Gera |
+|---------------|------|
+| `ranking_worsened` / `status_worsened` / `gap_increased` | `competitive_threat_alert` |
+| `ranking_improved` / `status_improved` / `market_became_less_aggressive` / `gap_decreased` | `competitive_opportunity_alert` |
+| `market_min_changed` / `market_became_more_aggressive` | `market_movement_alert` |
+| `reference_became_unavailable` / `reference_became_available` | `reference_availability_alert` |
+
+Prioridade: Threat > Opportunity > MarketMovement > ReferenceAvailability.
+
+---
+
+## Supressões
+
+| Caminho | `skip_reason` | Observabilidade |
+|---------|--------------|----------------|
+| `ntfy_topic` não configurado | — | log DEBUG |
+| `run_status == "manual"` | — | log INFO |
+| `run_status` em {partial, expired, no_competitors} | `degraded_run` | log INFO + registro em `notification_logs` (`delivery_status='skipped'`) |
+| `valid_competitors_count < NOTIFICATION_MIN_QUORUM` | `insufficient_quorum` | log INFO + registro em `notification_logs` (`delivery_status='skipped'`) |
+| Cooldown ativo por (produto × tipo) | `cooldown_active` | log INFO (`notificacao_suprimida`) |
+| Já entregue para o mesmo (comparison_id, event_type) | `deduplicated` | log INFO (`notificacao_suprimida`) |
+
+Registros em `notification_logs` com `delivery_status='skipped'` usam `event_type='collection_health_alert'` e têm o campo `skip_reason` preenchido.
+
+---
 
 ## Cooldown
 
-Chave Redis:
+Chave Redis por (produto × tipo de alerta):
 
-```text
+```
 cooldown:notify:{monitored_id}:{event_type}
 ```
 
-TTL padrao: `NOTIFICATION_COOLDOWN_MINUTES`.
+TTL: `NOTIFICATION_COOLDOWN_MINUTES` (padrão 30 min). Um hit de cooldown em `price_drop_alert` não bloqueia `competitive_threat_alert` do mesmo produto.
 
-Cooldown e granular por produto e tipo de alerta. Um alerta de preco nao bloqueia necessariamente outro tipo de alerta do mesmo produto.
+---
 
-## Quorum minimo
+## Diagnóstico de ausência de notificação
 
-Configuracao: `NOTIFICATION_MIN_QUORUM`.
-
-Comparacao pode ser persistida com poucos ou nenhum concorrente valido para auditoria, mas notificacao competitiva exige quorum minimo.
-
-## Deduplicacao
-
-Ha dois niveis:
-
-- Snapshot de comparacao identico dentro da janela de deduplicacao nao e persistido.
-- Entrega de notificacao ja enviada para a mesma comparacao e tipo de alerta nao e repetida.
-
-## Exemplo de payload interno
-
-```json
-{
-  "monitored_id": "uuid",
-  "comparison_id": "uuid",
-  "alert_type": "price_drop_alert",
-  "reason_codes": ["price_drop", "ranking_changed"],
-  "old_price": "129.90",
-  "new_price": "119.90",
-  "old_status": "attention",
-  "new_status": "competitive",
-  "old_ranking": 2,
-  "new_ranking": 1,
-  "market_min_old": "125.00",
-  "market_min_new": "119.90",
-  "run_id": "uuid",
-  "run_status": "complete",
-  "participants_count": 4
-}
-```
-
-## Diagnostico de ausencia de notificacao
-
-Verificar nesta ordem:
-
-1. `ntfy_topic` esta configurado?
-2. Houve `comparison_task` depois da coleta?
-3. A comparacao persistiu ou foi deduplicada?
-4. `run_status` e `complete`?
-5. `valid_competitors_count` atende `NOTIFICATION_MIN_QUORUM`?
-6. Houve variacao maior ou igual a `NOTIFICATION_DELTA_PERCENT`?
-7. Ranking mudou de forma relevante?
-8. Cooldown esta ativo no Redis?
-9. Ja existe `notification_logs.delivery_status = sent` para a mesma comparacao e alerta?
-10. A task `notification_task` foi enfileirada e executada?
+1. `ntfy_topic` está configurado no `.env`?
+2. A `comparison_task` foi disparada após a coleta?
+3. `run_status == "complete"` na comparação?
+4. `valid_competitors_count >= NOTIFICATION_MIN_QUORUM`?
+5. Houve sinais técnicos na comparação (`reason_codes` preenchido)?
+6. Cooldown ativo? — `GET cooldown:notify:{monitored_id}:{event_type}` no Redis
+7. Já existe registro `delivery_status='sent'` para a mesma comparação e tipo?
+8. A `notification_task` foi enfileirada e executada (checar logs do worker)?
+9. Existe registro `delivery_status='skipped'` com `skip_reason` em `notification_logs`?

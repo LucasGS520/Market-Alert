@@ -18,22 +18,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infra.database import get_session
+from app.notifications.event_types import ALL_TYPES
 from app.notifications.notifications_schemas import NotificationLogRead
 from app.notifications.notifications_service import get_notification, list_notifications
 
-EventType = Literal[
-    # Tipos ativos (alert_type consolidados pelo pipeline de comparação)
-    "price_drop_alert", "price_rise_alert",
-    "competitive_position_alert",
-    "market_alert",
-    "availability_alert",
-    "error_alert",
-    # Valores legados (linhas históricas no banco)
-    "price_drop", "price_rise", "status_change", "ranking_change",
-    "product_unavailable", "product_available",
-    "market_price_drop", "market_price_rise",
-    "competitor_unavailable", "competitor_available",
-]
+_EVENT_TYPE_ENUM = sorted(ALL_TYPES)
 DeliveryStatus = Literal["pending", "sent", "failed", "skipped"]
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
@@ -45,7 +34,7 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 async def list_notifications_endpoint(
     session: Session,
     monitored_id: uuid.UUID | None = None,
-    event_type: EventType | None = None,
+    event_type: str | None = Query(default=None, enum=_EVENT_TYPE_ENUM),
     delivery_status: DeliveryStatus | None = None,
     competitor_id: uuid.UUID | None = None,
     date_from: datetime | None = Query(None, alias="from"),
@@ -56,8 +45,7 @@ async def list_notifications_endpoint(
     Lista tentativas de notificação com filtros opcionais.
 
     - **monitored_id**: filtra por produto monitorado.
-    - **event_type**: price_drop_alert, price_rise_alert, competitive_position_alert,
-      market_alert, availability_alert, error_alert (tipos ativos) ou valores legados.
+    - **event_type**: qualquer tipo presente em `event_types.ALL_TYPES` (ativos, auditoria, inativos ou legados).
     - **delivery_status**: pending, sent, failed ou skipped.
     - **competitor_id**: filtra eventos Tier 2 de um concorrente específico.
     - **from** / **to**: intervalo de data (ISO 8601).

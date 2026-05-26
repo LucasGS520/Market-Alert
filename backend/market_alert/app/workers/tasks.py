@@ -61,6 +61,18 @@ def _ranking_relevante(rank_old: int | None, rank_new: int | None, status_mudou:
     return status_mudou
 
 
+_STATUS_RANK = {"competitive": 0, "attention": 1, "urgent": 2}
+
+# Conjuntos de sinais para cada categoria de alerta.
+# Prioridade: ameaça > oportunidade > mercado > disponibilidade da referência.
+# Sinais de preço da referência (reference_price_drop/rise) são coletados apenas
+# como contexto em reason_codes e não disparam alerta por conta própria.
+_THREAT_SIGNALS      = frozenset({"ranking_worsened", "status_worsened", "gap_increased"})
+_OPPORTUNITY_SIGNALS = frozenset({"ranking_improved", "status_improved", "market_became_less_aggressive", "gap_decreased"})
+_MARKET_SIGNALS      = frozenset({"market_min_changed", "market_became_more_aggressive"})
+_REFERENCE_SIGNALS   = frozenset({"reference_became_unavailable", "reference_became_available"})
+
+
 class _AlertDecision:
     __slots__ = ("alert_type", "reason_codes")
 
@@ -69,25 +81,30 @@ class _AlertDecision:
         self.reason_codes = reason_codes
 
 
+def _calcular_gap(price: Decimal | None, min_price: Decimal | None) -> float | None:
+    """Gap percentual entre o preço da referência e o mínimo de mercado."""
+    if price and min_price and float(min_price) > 0:
+        return float((price - min_price) / min_price * 100)
+    return None
+
+
 def _decide_alert(sinais: list[str]) -> _AlertDecision | None:
     """N sinais técnicos → 1 decisão de alerta público (ou None para não notificar).
 
-    Prioridade: price_drop/rise > competitive_position > market_alert.
-    Sinais da oferta de referência e sinais de mercado são tratados como classes
-    distintas: reference signals → competitive_position_alert;
-    market-only signals → market_alert.
+    Hierarquia: competitive_threat > competitive_opportunity > market_movement >
+    reference_availability. Sinais de preço da referência são apenas contexto.
     """
     if not sinais:
         return None
     sinal_set = set(sinais)
-    if "price_drop" in sinal_set:
-        return _AlertDecision("price_drop_alert", sinais)
-    if "price_rise" in sinal_set:
-        return _AlertDecision("price_rise_alert", sinais)
-    if sinal_set & {"status_changed", "ranking_changed"}:
-        return _AlertDecision("competitive_position_alert", sinais)
-    if "market_min_changed" in sinal_set:
-        return _AlertDecision("market_alert", sinais)
+    if sinal_set & _THREAT_SIGNALS:
+        return _AlertDecision("competitive_threat_alert", sinais)
+    if sinal_set & _OPPORTUNITY_SIGNALS:
+        return _AlertDecision("competitive_opportunity_alert", sinais)
+    if sinal_set & _MARKET_SIGNALS:
+        return _AlertDecision("market_movement_alert", sinais)
+    if sinal_set & _REFERENCE_SIGNALS:
+        return _AlertDecision("reference_availability_alert", sinais)
     return None
 
 
@@ -294,6 +311,7 @@ def comparison_task(
         async with AsyncSessionLocal() as session:
             from app.comparison.comparison_model import Comparison
             from app.infra.config import settings as _settings
+            from app.notifications.notifications_service import registrar_supressao
 
             mid = uuid.UUID(monitored_id)
 
@@ -330,6 +348,13 @@ def comparison_task(
                             run_status=comparacao.run_status,
                             run_id=run_id,
                         )
+                        await registrar_supressao(
+                            session, mid, comparacao.id,
+                            skip_reason="degraded_run",
+                            run_id=run_id,
+                            run_status=comparacao.run_status,
+                        )
+                        await session.commit()
                         return
 
                     if comparacao.valid_competitors_count < _settings.notification_min_quorum:
@@ -340,6 +365,13 @@ def comparison_task(
                             min_quorum=_settings.notification_min_quorum,
                             run_id=run_id,
                         )
+                        await registrar_supressao(
+                            session, mid, comparacao.id,
+                            skip_reason="insufficient_quorum",
+                            run_id=run_id,
+                            run_status=comparacao.run_status,
+                        )
+                        await session.commit()
                         return
 
                     # Snapshot elegível para notificação: evento econômico confirmado
@@ -356,32 +388,57 @@ def comparison_task(
                     # --- Coleta de sinais técnicos ---
                     sinais: list[str] = []
 
-                    # Sinal 1: variação de preço do produto monitorado
+                    # Sinal: variação de preço da referência (contexto — não dispara alerta sozinho)
                     if preco_anterior is not None and preco_novo is not None and preco_anterior > 0:
                         variacao_pct = float(abs(preco_novo - preco_anterior) / preco_anterior * 100)
                         if variacao_pct >= _settings.notification_delta_percent:
-                            sinais.append("price_drop" if preco_novo < preco_anterior else "price_rise")
+                            sinais.append("reference_price_drop" if preco_novo < preco_anterior else "reference_price_rise")
 
-                    # Sinal 2: mudança de status competitivo da oferta de referência.
+                    # Sinal: mudança direcional de status competitivo.
                     # Apenas quando ambos os snapshots têm referência disponível — evita
-                    # disparar "status_changed" quando a referência simplesmente ficou indisponível.
+                    # disparar sinal de status quando a referência simplesmente ficou indisponível.
                     if (
                         status_anterior is not None
                         and comparacao.status is not None
                         and comparacao.status != status_anterior
                     ):
-                        sinais.append("status_changed")
+                        rank_status_ant = _STATUS_RANK.get(status_anterior, 0)
+                        rank_status_nov = _STATUS_RANK.get(comparacao.status, 0)
+                        sinais.append("status_worsened" if rank_status_nov > rank_status_ant else "status_improved")
 
-                    # Sinal 3: mudança de ranking (apenas se relevante)
+                    # Sinal: mudança direcional de ranking (apenas se relevante)
+                    status_mudou = "status_worsened" in sinais or "status_improved" in sinais
                     if comparacao_anterior is not None and rank_old != rank_new:
-                        if _ranking_relevante(rank_old, rank_new, "status_changed" in sinais):
-                            sinais.append("ranking_changed")
+                        if _ranking_relevante(rank_old, rank_new, status_mudou):
+                            # _ranking_relevante garante que ambos não são None
+                            sinais.append("ranking_worsened" if rank_new > rank_old else "ranking_improved")  # type: ignore[operator]
 
-                    # Sinal 4: preço mínimo de mercado mudou
+                    # Sinal: variação do mínimo de mercado (direcional)
                     if min_ant and min_nov and float(min_ant) > 0:
                         variacao_pct_m = float(abs(float(min_nov) - float(min_ant)) / float(min_ant) * 100)
                         if variacao_pct_m >= _settings.notification_delta_percent:
                             sinais.append("market_min_changed")
+                            sinais.append(
+                                "market_became_more_aggressive" if float(min_nov) < float(min_ant)
+                                else "market_became_less_aggressive"
+                            )
+
+                    # Sinal: variação do gap referência vs mínimo de mercado
+                    min_ant_dec = Decimal(str(min_ant)) if min_ant else None
+                    min_nov_dec = Decimal(str(min_nov)) if min_nov else None
+                    gap_ant = _calcular_gap(preco_anterior, min_ant_dec)
+                    gap_nov = _calcular_gap(preco_novo, min_nov_dec)
+                    if gap_ant is not None and gap_nov is not None:
+                        delta_gap = gap_nov - gap_ant
+                        if abs(delta_gap) >= _settings.notification_delta_percent:
+                            sinais.append("gap_increased" if delta_gap > 0 else "gap_decreased")
+
+                    # Sinal: mudança de disponibilidade da oferta de referência
+                    if comparacao_anterior is not None:
+                        ref_ant = comparacao_anterior.reference_available
+                        ref_nov = comparacao.reference_available
+                        if ref_ant != ref_nov:
+                            sinais.append("reference_became_available" if ref_nov else "reference_became_unavailable")
 
                     # --- AlertDecision: N sinais → 1 alerta consolidado ---
                     decision = _decide_alert(sinais)

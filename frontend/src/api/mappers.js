@@ -70,7 +70,7 @@ function mapCompetitor(c) {
 
 function mapNotification(n) {
   // Mantem a semantica do NotificationLog e adiciona apenas classificacao visual.
-  const urgentTypes = ['price_rise_alert', 'competitive_position_alert', 'market_alert'];
+  // URGENT_TYPES definido em src/constants/notificationTypes.js (carregado antes via script tag).
   return {
     id: n.id,
     monitored_id: n.monitored_id,
@@ -82,7 +82,7 @@ function mapNotification(n) {
     run_status: n.run_status,
     participants_count: n.participants_count,
     sent_at: relativeTime(n.sent_at),
-    kind: urgentTypes.includes(n.event_type) ? 'urgent' : 'info',
+    kind: URGENT_TYPES.has(n.event_type) ? 'urgent' : 'info',
   };
 }
 

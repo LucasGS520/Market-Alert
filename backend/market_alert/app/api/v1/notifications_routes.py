@@ -1,9 +1,9 @@
 """
 Router: notificações.
 
-Endpoints para consultar o histórico de tentativas de entrega de alertas.
-Cada registro representa uma tentativa de entrega via ntfy e expõe
-o status de entrega, erro, comparação origem e contexto do evento.
+Endpoints para consultar o histórico de alertas.
+Cada registro representa uma entrega, falha ou supressão de notificação —
+incluindo bloqueios operacionais auditáveis.
 
 Endpoints:
     GET /notifications                    → listagem com filtros

@@ -8,21 +8,19 @@ const EVENT_META = {
   competitive_opportunity_alert: { label: 'Oportunidade',          icon: 'trend-up',   tone: 'success'  },
   market_movement_alert:         { label: 'Movimento de mercado',  icon: 'trend-down', tone: 'info'     },
   reference_availability_alert:  { label: 'Disponibilidade ref.',  icon: 'eye',        tone: 'warning'  },
-  availability_alert:            { label: 'Disponibilidade',       icon: 'eye',        tone: 'warning'  },
+  competitor_movement_alert:     { label: 'Movimento concorrente', icon: 'zap',        tone: 'info'     },
+  competitor_availability_alert: { label: 'Concorrente',           icon: 'eye',        tone: 'info'     },
 
   // ── Auditoria operacional — nunca entregue ao usuário ──────────────────────
   collection_health_alert:       { label: 'Saúde de coleta',       icon: 'warning',    tone: 'warning'  },
 
-  // ── Inativos — definidos no schema, sem lógica de geração ainda ────────────
-  competitor_movement_alert:     { label: 'Movimento concorrente', icon: 'zap',        tone: 'info'     },
-  competitor_availability_alert: { label: 'Concorrente',           icon: 'eye',        tone: 'info'     },
-
   // ── Deprecated — pipeline antigo; mantidos para exibir registros históricos ─
-  price_drop_alert:           { label: 'Queda de preço',      icon: 'arrow-down', tone: 'danger'  },
-  price_rise_alert:           { label: 'Alta de preço',       icon: 'arrow-up',   tone: 'success' },
-  competitive_position_alert: { label: 'Posição competitiva', icon: 'target',     tone: 'brand'   },
-  market_alert:               { label: 'Variação de mercado', icon: 'trend-down', tone: 'info'    },
-  error_alert:                { label: 'Problema de coleta',  icon: 'warning',    tone: 'warning' },
+  availability_alert:         { label: 'Disponibilidade',      icon: 'eye',        tone: 'warning'  },
+  price_drop_alert:           { label: 'Queda de preço',       icon: 'arrow-down', tone: 'danger'   },
+  price_rise_alert:           { label: 'Alta de preço',        icon: 'arrow-up',   tone: 'success'  },
+  competitive_position_alert: { label: 'Posição competitiva',  icon: 'target',     tone: 'brand'    },
+  market_alert:               { label: 'Variação de mercado',  icon: 'trend-down', tone: 'info'     },
+  error_alert:                { label: 'Problema de coleta',   icon: 'warning',    tone: 'warning'  },
 };
 
 // Grupos usados pelos filtros da tela de Alertas.
@@ -30,7 +28,7 @@ const EVENT_META = {
 const TYPE_GROUPS = {
   competitive:  ['competitive_threat_alert', 'competitive_opportunity_alert'],
   market:       ['market_movement_alert', 'competitor_movement_alert'],
-  availability: ['availability_alert', 'reference_availability_alert', 'competitor_availability_alert'],
+  availability: ['reference_availability_alert', 'competitor_availability_alert'],
   collection:   ['collection_health_alert'],
 };
 

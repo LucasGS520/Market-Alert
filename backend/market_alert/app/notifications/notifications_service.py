@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infra.config import settings
 from app.infra.clients.ntfy import send_ntfy
-from app.notifications.event_types import AUDIT_ONLY_TYPES
+from app.notifications.event_types import AUDIT_ONLY_TYPES, DELIVERABLE_TYPES
 from app.notifications.notifications_model import NotificationLog
 from app.workers.redis import is_in_cooldown, set_cooldown
 
@@ -50,6 +50,10 @@ class NotificationPayload:
     run_id: str | None = None
     run_status: str | None = None
     participants_count: int | None = None
+    attempt_count: int = 1
+    competitor_id: uuid.UUID | None = None
+    competitor_name: str | None = None
+    competitor_url: str | None = None
 
 
 def _montar_mensagem(
@@ -62,6 +66,7 @@ def _montar_mensagem(
     market_min_old: Decimal | None = None,
     market_min_new: Decimal | None = None,
     reason_codes: list[str] | None = None,
+    competitor_name: str | None = None,
 ) -> tuple[str, str]:
     """Retorna (titulo, mensagem) para o alert_type dado. URL vai no header Click, não aqui."""
     reason_codes = reason_codes or []
@@ -118,6 +123,19 @@ def _montar_mensagem(
             titulo = f"Referência disponível — {nome_produto}"
             mensagem = "O produto de referência voltou a ficar disponível."
 
+    elif alert_type == "competitor_movement_alert":
+        nome_conc = competitor_name or "Concorrente"
+        titulo = f"Movimento de concorrente — {nome_produto}"
+        if "price_movement" in reason_codes:
+            mensagem = f"{nome_conc} alterou o preço significativamente."
+        else:
+            mensagem = f"{nome_conc} sofreu variação relevante."
+
+    elif alert_type == "competitor_availability_alert":
+        nome_conc = competitor_name or "Concorrente"
+        titulo = f"Disponibilidade de concorrente — {nome_produto}"
+        mensagem = f"{nome_conc} mudou sua disponibilidade."
+
     else:
         titulo = f"Alerta — {nome_produto}"
         mensagem = f"Tipo: {alert_type}"
@@ -147,7 +165,7 @@ def _registrar_tentativa(
         message=mensagem,
         title=titulo,
         error_message=erro,
-        attempt_count=1,
+        attempt_count=payload.attempt_count,
         old_price=payload.old_price,
         new_price=payload.new_price,
         old_status=payload.old_status,
@@ -157,6 +175,7 @@ def _registrar_tentativa(
         market_min_old=payload.market_min_old,
         market_min_new=payload.market_min_new,
         reason_codes=payload.reason_codes or None,
+        competitor_id=payload.competitor_id,
         run_id=payload.run_id,
         run_status=payload.run_status,
         participants_count=payload.participants_count,
@@ -226,6 +245,10 @@ async def send_notification(
         raise ValueError(
             f"Tipo '{payload.alert_type}' é exclusivo de auditoria e não pode ser entregue via ntfy."
         )
+    if payload.alert_type not in DELIVERABLE_TYPES:
+        raise ValueError(
+            f"Tipo '{payload.alert_type}' não está em DELIVERABLE_TYPES e não pode ser entregue."
+        )
 
     if not settings.ntfy_topic:
         logger.debug(
@@ -253,6 +276,7 @@ async def send_notification(
         payload.old_ranking, payload.new_ranking,
         payload.market_min_old, payload.market_min_new,
         payload.reason_codes,
+        payload.competitor_name,
     )
 
     if await _ja_entregue(session, payload.comparison_id, payload.alert_type):
@@ -273,7 +297,8 @@ async def send_notification(
     )
 
     try:
-        await send_ntfy(settings.ntfy_url, settings.ntfy_topic, titulo, mensagem, click_url=product_url)
+        click_url = payload.competitor_url or product_url
+        await send_ntfy(settings.ntfy_url, settings.ntfy_topic, titulo, mensagem, click_url=click_url)
 
         log_id = _registrar_tentativa(session, payload, titulo, mensagem, falhou=False, erro=None)
         await session.commit()

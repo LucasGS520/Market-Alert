@@ -79,6 +79,7 @@ function mapNotification(n) {
     title: n.title,
     message: n.message,
     error_message: n.error_message,
+    skip_reason: n.skip_reason ?? null,
     run_status: n.run_status,
     participants_count: n.participants_count,
     sent_at: relativeTime(n.sent_at),

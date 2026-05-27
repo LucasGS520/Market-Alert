@@ -38,6 +38,8 @@ from sqlalchemy import select
 from app.infra.database import AsyncSessionLocal
 from app.infra.clients.scraper import ScraperClient, ScraperUnavailableError
 from app.comparison.comparison_service import calculate_comparison
+from app.notifications.alert_decision import AlertDecision, build_competitor_signals, build_signals, decide_alert
+from app.products.price_history.price_history_service import get_competitor_price_history
 from app.products.competitor.competitor_model import Competitor
 from app.products.competitor.competitor_service import collect_competitor
 from app.products.monitored.monitored_model import MonitoredProduct
@@ -48,64 +50,6 @@ from app.workers.collection_run import get_status, mark_deferred, mark_done, mar
 from app.workers.redis import get_redis, invalidate_comparison_cache
 
 logger = structlog.get_logger()
-
-
-def _ranking_relevante(rank_old: int | None, rank_new: int | None, status_mudou: bool) -> bool:
-    """Ranking é relevante quando: ganhou/perdeu 1ª posição, diferença >=2, ou status também mudou."""
-    if rank_old is None or rank_new is None:
-        return False
-    if 1 in (rank_old, rank_new):
-        return True
-    if abs(rank_new - rank_old) >= 2:
-        return True
-    return status_mudou
-
-
-_STATUS_RANK = {"competitive": 0, "attention": 1, "urgent": 2}
-
-# Conjuntos de sinais para cada categoria de alerta.
-# Prioridade: ameaça > oportunidade > mercado > disponibilidade da referência.
-# Sinais de preço da referência (reference_price_drop/rise) são coletados apenas
-# como contexto em reason_codes e não disparam alerta por conta própria.
-_THREAT_SIGNALS      = frozenset({"ranking_worsened", "status_worsened", "gap_increased"})
-_OPPORTUNITY_SIGNALS = frozenset({"ranking_improved", "status_improved", "market_became_less_aggressive", "gap_decreased"})
-_MARKET_SIGNALS      = frozenset({"market_min_changed", "market_became_more_aggressive"})
-_REFERENCE_SIGNALS   = frozenset({"reference_became_unavailable", "reference_became_available"})
-
-
-class _AlertDecision:
-    __slots__ = ("alert_type", "reason_codes")
-
-    def __init__(self, alert_type: str, reason_codes: list[str]) -> None:
-        self.alert_type = alert_type
-        self.reason_codes = reason_codes
-
-
-def _calcular_gap(price: Decimal | None, min_price: Decimal | None) -> float | None:
-    """Gap percentual entre o preço da referência e o mínimo de mercado."""
-    if price and min_price and float(min_price) > 0:
-        return float((price - min_price) / min_price * 100)
-    return None
-
-
-def _decide_alert(sinais: list[str]) -> _AlertDecision | None:
-    """N sinais técnicos → 1 decisão de alerta público (ou None para não notificar).
-
-    Hierarquia: competitive_threat > competitive_opportunity > market_movement >
-    reference_availability. Sinais de preço da referência são apenas contexto.
-    """
-    if not sinais:
-        return None
-    sinal_set = set(sinais)
-    if sinal_set & _THREAT_SIGNALS:
-        return _AlertDecision("competitive_threat_alert", sinais)
-    if sinal_set & _OPPORTUNITY_SIGNALS:
-        return _AlertDecision("competitive_opportunity_alert", sinais)
-    if sinal_set & _MARKET_SIGNALS:
-        return _AlertDecision("market_movement_alert", sinais)
-    if sinal_set & _REFERENCE_SIGNALS:
-        return _AlertDecision("reference_availability_alert", sinais)
-    return None
 
 
 @celery_app.task(
@@ -184,25 +128,6 @@ def collector_task(
                 )
 
                 curr_available = produto.is_available
-                if prev_available != curr_available:
-                    razao_disp = "product_available" if curr_available else "product_unavailable"
-                    notification_task.delay(
-                        monitored_id=str(pid),
-                        comparison_id=None,
-                        alert_type="availability_alert",
-                        reason_codes=[razao_disp],
-                        old_price=None,
-                        new_price=None,
-                        old_status=None,
-                        new_status=None,
-                        product_url=produto.url_original,
-                        product_name=produto.name,
-                    )
-                    logger.info(
-                        "notificacao_disponibilidade_enfileirada",
-                        produto_id=str(pid),
-                        razao=razao_disp,
-                    )
 
             # ── Coleta de concorrente ───────────────────────────────────────
             elif competitor_id:
@@ -385,63 +310,21 @@ def comparison_task(
                     min_ant = comparacao_anterior.min_price if comparacao_anterior else None
                     min_nov = comparacao.min_price
 
-                    # --- Coleta de sinais técnicos ---
-                    sinais: list[str] = []
-
-                    # Sinal: variação de preço da referência (contexto — não dispara alerta sozinho)
-                    if preco_anterior is not None and preco_novo is not None and preco_anterior > 0:
-                        variacao_pct = float(abs(preco_novo - preco_anterior) / preco_anterior * 100)
-                        if variacao_pct >= _settings.notification_delta_percent:
-                            sinais.append("reference_price_drop" if preco_novo < preco_anterior else "reference_price_rise")
-
-                    # Sinal: mudança direcional de status competitivo.
-                    # Apenas quando ambos os snapshots têm referência disponível — evita
-                    # disparar sinal de status quando a referência simplesmente ficou indisponível.
-                    if (
-                        status_anterior is not None
-                        and comparacao.status is not None
-                        and comparacao.status != status_anterior
-                    ):
-                        rank_status_ant = _STATUS_RANK.get(status_anterior, 0)
-                        rank_status_nov = _STATUS_RANK.get(comparacao.status, 0)
-                        sinais.append("status_worsened" if rank_status_nov > rank_status_ant else "status_improved")
-
-                    # Sinal: mudança direcional de ranking (apenas se relevante)
-                    status_mudou = "status_worsened" in sinais or "status_improved" in sinais
-                    if comparacao_anterior is not None and rank_old != rank_new:
-                        if _ranking_relevante(rank_old, rank_new, status_mudou):
-                            # _ranking_relevante garante que ambos não são None
-                            sinais.append("ranking_worsened" if rank_new > rank_old else "ranking_improved")  # type: ignore[operator]
-
-                    # Sinal: variação do mínimo de mercado (direcional)
-                    if min_ant and min_nov and float(min_ant) > 0:
-                        variacao_pct_m = float(abs(float(min_nov) - float(min_ant)) / float(min_ant) * 100)
-                        if variacao_pct_m >= _settings.notification_delta_percent:
-                            sinais.append("market_min_changed")
-                            sinais.append(
-                                "market_became_more_aggressive" if float(min_nov) < float(min_ant)
-                                else "market_became_less_aggressive"
-                            )
-
-                    # Sinal: variação do gap referência vs mínimo de mercado
-                    min_ant_dec = Decimal(str(min_ant)) if min_ant else None
-                    min_nov_dec = Decimal(str(min_nov)) if min_nov else None
-                    gap_ant = _calcular_gap(preco_anterior, min_ant_dec)
-                    gap_nov = _calcular_gap(preco_novo, min_nov_dec)
-                    if gap_ant is not None and gap_nov is not None:
-                        delta_gap = gap_nov - gap_ant
-                        if abs(delta_gap) >= _settings.notification_delta_percent:
-                            sinais.append("gap_increased" if delta_gap > 0 else "gap_decreased")
-
-                    # Sinal: mudança de disponibilidade da oferta de referência
-                    if comparacao_anterior is not None:
-                        ref_ant = comparacao_anterior.reference_available
-                        ref_nov = comparacao.reference_available
-                        if ref_ant != ref_nov:
-                            sinais.append("reference_became_available" if ref_nov else "reference_became_unavailable")
-
-                    # --- AlertDecision: N sinais → 1 alerta consolidado ---
-                    decision = _decide_alert(sinais)
+                    # --- Sinais técnicos → decisão de alerta ---
+                    sinais = build_signals(
+                        preco_anterior=preco_anterior,
+                        preco_novo=preco_novo,
+                        status_anterior=status_anterior,
+                        status_novo=comparacao.status,
+                        rank_old=rank_old,
+                        rank_new=rank_new,
+                        min_ant=Decimal(str(min_ant)) if min_ant else None,
+                        min_nov=Decimal(str(min_nov)) if min_nov else None,
+                        ref_ant=comparacao_anterior.reference_available if comparacao_anterior else None,
+                        ref_nov=comparacao.reference_available,
+                        delta_percent=_settings.notification_delta_percent,
+                    )
+                    decision = decide_alert(sinais)
 
                     if decision:
                         notification_task.delay(
@@ -479,6 +362,56 @@ def comparison_task(
                             run_id=run_id,
                         )
 
+                    # --- Tier 2: alertas por concorrente (aditivos, prioridade menor) ---
+                    concorrentes_result = await session.execute(
+                        select(Competitor).where(Competitor.monitored_id == mid)
+                    )
+                    for concorrente in concorrentes_result.scalars().all():
+                        historico = await get_competitor_price_history(session, concorrente.id, limit=2)
+                        if len(historico) < 2:
+                            continue
+                        curr_h, prev_h = historico[0], historico[1]
+                        cid_str = str(concorrente.id)
+                        comp_signals = build_competitor_signals(
+                            competitors_prev_prices={cid_str: Decimal(str(prev_h.price)) if prev_h.price else None},
+                            competitors_curr_prices={cid_str: Decimal(str(curr_h.price)) if curr_h.price else None},
+                            competitors_prev_avail={cid_str: prev_h.is_available},
+                            competitors_curr_avail={cid_str: curr_h.is_available},
+                            delta_percent=_settings.notification_delta_percent,
+                        )
+                        for sig in comp_signals:
+                            c_alert_type = (
+                                "competitor_movement_alert"
+                                if sig.signal_type == "price_movement"
+                                else "competitor_availability_alert"
+                            )
+                            notification_task.delay(
+                                monitored_id=str(mid),
+                                comparison_id=str(comparacao.id),
+                                alert_type=c_alert_type,
+                                reason_codes=[sig.signal_type],
+                                old_price=str(sig.details["old_price"]) if "old_price" in sig.details else None,
+                                new_price=str(sig.details["new_price"]) if "new_price" in sig.details else None,
+                                old_status=None,
+                                new_status=None,
+                                product_url=produto.url_original,
+                                product_name=produto.name,
+                                run_id=run_id,
+                                run_status=run_status,
+                                participants_count=comparacao.participants_count,
+                                competitor_id=cid_str,
+                                competitor_name=concorrente.name,
+                                competitor_url=concorrente.url_original,
+                            )
+                            logger.info(
+                                "notificacao_concorrente_enfileirada",
+                                produto_id=str(mid),
+                                concorrente_id=cid_str,
+                                alert_type=c_alert_type,
+                                signal_type=sig.signal_type,
+                                run_id=run_id,
+                            )
+
     run_async_task(_executar)
 
 
@@ -507,6 +440,9 @@ def notification_task(
     run_id: str | None = None,
     run_status: str | None = None,
     participants_count: int | None = None,
+    competitor_id: str | None = None,
+    competitor_name: str | None = None,
+    competitor_url: str | None = None,
 ) -> None:
     """Entrega o alerta consolidado via ntfy com retry/backoff independente.
 
@@ -542,6 +478,10 @@ def notification_task(
         run_id=run_id,
         run_status=run_status,
         participants_count=participants_count,
+        attempt_count=self.request.retries + 1,
+        competitor_id=uuid.UUID(competitor_id) if competitor_id else None,
+        competitor_name=competitor_name,
+        competitor_url=competitor_url,
     )
 
     logger.info(

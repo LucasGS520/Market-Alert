@@ -21,6 +21,9 @@ function DrawerNotification({ n, onOpen }) {
         </div>
         <div style={{fontSize: 13, fontWeight: 700, color: 'var(--ma-fg-strong)'}}>{n.title || n.message}</div>
         <div style={{fontSize: 12, color: 'var(--ma-fg)', marginTop: 4, lineHeight: 1.5}}>{n.message}</div>
+        {n.delivery_status === 'skipped' && n.skip_reason && (
+          <div style={{fontSize: 11, color: 'var(--ma-fg-subtle)', fontFamily: 'var(--ma-font-mono)', marginTop: 2}}>{n.skip_reason}</div>
+        )}
       </div>
       <div style={{fontFamily:'var(--ma-font-mono)', fontSize: 10, color:'var(--ma-fg-subtle)', whiteSpace: 'nowrap'}}>{n.sent_at}</div>
     </div>

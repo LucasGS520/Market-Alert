@@ -48,6 +48,12 @@ function AlertCard({ n, products, onOpen }) {
               <span style={{color: 'var(--ma-danger)', fontFamily: 'var(--ma-font-mono)'}}>{n.error_message}</span>
             </>
           )}
+          {n.delivery_status === 'skipped' && n.skip_reason && (
+            <>
+              <span style={{opacity: 0.4}}>·</span>
+              <span style={{color: 'var(--ma-fg-muted)', fontFamily: 'var(--ma-font-mono)'}}>{n.skip_reason}</span>
+            </>
+          )}
         </div>
       </div>
       <div className="ma-alert-time">{n.sent_at}</div>

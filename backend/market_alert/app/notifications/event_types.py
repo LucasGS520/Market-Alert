@@ -1,16 +1,19 @@
 ACTIVE_TYPES: frozenset[str] = frozenset({
-    # Hierarquia por impacto competitivo — gerados via _decide_alert() em tasks.py
+    # Hierarquia por impacto competitivo — gerados via decide_alert() em alert_decision.py
     "competitive_threat_alert",
     "competitive_opportunity_alert",
     "market_movement_alert",
     "reference_availability_alert",
-    # Gerado diretamente pelo collector_task (mudança de disponibilidade do produto)
-    "availability_alert",
+    # Tier 2: alertas por concorrente — gerados via build_competitor_signals() em comparison_task
+    "competitor_movement_alert",
+    "competitor_availability_alert",
 })
 
-# Gerados pelo pipeline antigo (antes da migração 019).
-# Podem existir em notification_logs como histórico, mas nenhum caminho em tasks.py os produz hoje.
+# Gerados pelo pipeline antigo ou por fluxos removidos.
+# Podem existir em notification_logs como histórico, mas não são mais produzidos.
 DEPRECATED_TYPES: frozenset[str] = frozenset({
+    # Gerado pelo collector_task unitário (fluxo pré-orquestrador); substituído por reference_availability_alert
+    "availability_alert",
     "price_drop_alert",
     "price_rise_alert",
     "competitive_position_alert",
@@ -24,11 +27,7 @@ AUDIT_ONLY_TYPES: frozenset[str] = frozenset({
     "collection_health_alert",
 })
 
-# Definidos no schema DB (migration 019) mas sem lógica de geração implementada ainda.
-INACTIVE_TYPES: frozenset[str] = frozenset({
-    "competitor_movement_alert",
-    "competitor_availability_alert",
-})
+INACTIVE_TYPES: frozenset[str] = frozenset()
 
 # Preservados para compatibilidade com linhas históricas — não são gerados pelo pipeline atual.
 LEGACY_TYPES: frozenset[str] = frozenset({

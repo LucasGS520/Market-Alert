@@ -52,7 +52,7 @@ calculate_comparison  →  snapshot de mercado
     reference_available=True  → ranking + status + potential_adjustment calculados
     reference_available=False → apenas min/max/avg/contadores
   ↓
-sinais → no máximo 1 alerta público por classe (referência ou mercado)
+decide_alert() + fallback de concorrente → no máximo 1 notification_task por comparação
   ↓
 notification_task  →  ntfy (se configurado, com quorum e fora do cooldown)
 ```
@@ -188,7 +188,7 @@ collector_task(
 
 comparison_task(
     monitored_id: str,
-    old_price: str | None = None,   # Decimal serializado, para avaliação de notificação
+    old_price: str | None = None,   # Decimal serializado, passado para notification_task
     new_price: str | None = None,
     run_id: str | None = None,      # aguarda rodada coordenada antes de calcular
 )

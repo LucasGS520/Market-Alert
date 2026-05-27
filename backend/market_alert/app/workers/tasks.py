@@ -310,7 +310,7 @@ def comparison_task(
                     min_ant = comparacao_anterior.min_price if comparacao_anterior else None
                     min_nov = comparacao.min_price
 
-                    # --- Sinais técnicos → decisão de alerta ---
+                    # --- Sinais técnicos → decisão de alerta (um evento por comparação) ---
                     sinais = build_signals(
                         preco_anterior=preco_anterior,
                         preco_novo=preco_novo,
@@ -327,6 +327,7 @@ def comparison_task(
                     decision = decide_alert(sinais)
 
                     if decision:
+                        # Evento competitivo/mercado/disponibilidade detectado — enfileira e encerra.
                         notification_task.delay(
                             monitored_id=str(mid),
                             comparison_id=str(comparacao.id),
@@ -355,43 +356,52 @@ def comparison_task(
                             run_id=run_id,
                         )
                     else:
-                        logger.debug(
-                            "notificacao_sem_alerta",
-                            produto_id=str(mid),
-                            sinais=sinais,
-                            run_id=run_id,
+                        # Sem evento competitivo primário — verificar se algum concorrente
+                        # teve variação relevante que justifique ser o evento principal.
+                        concorrentes_result = await session.execute(
+                            select(Competitor).where(Competitor.monitored_id == mid)
                         )
+                        comp_signals_all: list = []
+                        comp_metadata: dict = {}
+                        for concorrente in concorrentes_result.scalars().all():
+                            historico = await get_competitor_price_history(session, concorrente.id, limit=2)
+                            if len(historico) < 2:
+                                continue
+                            curr_h, prev_h = historico[0], historico[1]
+                            cid_str = str(concorrente.id)
+                            comp_signals = build_competitor_signals(
+                                competitors_prev_prices={cid_str: Decimal(str(prev_h.price)) if prev_h.price else None},
+                                competitors_curr_prices={cid_str: Decimal(str(curr_h.price)) if curr_h.price else None},
+                                competitors_prev_avail={cid_str: prev_h.is_available},
+                                competitors_curr_avail={cid_str: curr_h.is_available},
+                                delta_percent=_settings.notification_delta_percent,
+                            )
+                            if comp_signals:
+                                comp_signals_all.extend(comp_signals)
+                                comp_metadata[concorrente.id] = {
+                                    "name": concorrente.name,
+                                    "url": concorrente.url_original,
+                                }
 
-                    # --- Tier 2: alertas por concorrente (aditivos, prioridade menor) ---
-                    concorrentes_result = await session.execute(
-                        select(Competitor).where(Competitor.monitored_id == mid)
-                    )
-                    for concorrente in concorrentes_result.scalars().all():
-                        historico = await get_competitor_price_history(session, concorrente.id, limit=2)
-                        if len(historico) < 2:
-                            continue
-                        curr_h, prev_h = historico[0], historico[1]
-                        cid_str = str(concorrente.id)
-                        comp_signals = build_competitor_signals(
-                            competitors_prev_prices={cid_str: Decimal(str(prev_h.price)) if prev_h.price else None},
-                            competitors_curr_prices={cid_str: Decimal(str(curr_h.price)) if curr_h.price else None},
-                            competitors_prev_avail={cid_str: prev_h.is_available},
-                            competitors_curr_avail={cid_str: curr_h.is_available},
-                            delta_percent=_settings.notification_delta_percent,
-                        )
-                        for sig in comp_signals:
+                        if comp_signals_all:
+                            # Prefere variação de preço sobre mudança de disponibilidade
+                            principal = next(
+                                (s for s in comp_signals_all if s.signal_type == "price_movement"),
+                                comp_signals_all[0],
+                            )
                             c_alert_type = (
-                                "competitor_movement_alert"
-                                if sig.signal_type == "price_movement"
+                                "competitor_price_movement_alert"
+                                if principal.signal_type == "price_movement"
                                 else "competitor_availability_alert"
                             )
+                            meta = comp_metadata.get(principal.competitor_id, {})
                             notification_task.delay(
                                 monitored_id=str(mid),
                                 comparison_id=str(comparacao.id),
                                 alert_type=c_alert_type,
-                                reason_codes=[sig.signal_type],
-                                old_price=str(sig.details["old_price"]) if "old_price" in sig.details else None,
-                                new_price=str(sig.details["new_price"]) if "new_price" in sig.details else None,
+                                reason_codes=[principal.signal_type],
+                                old_price=str(principal.details["old_price"]) if "old_price" in principal.details else None,
+                                new_price=str(principal.details["new_price"]) if "new_price" in principal.details else None,
                                 old_status=None,
                                 new_status=None,
                                 product_url=produto.url_original,
@@ -399,16 +409,23 @@ def comparison_task(
                                 run_id=run_id,
                                 run_status=run_status,
                                 participants_count=comparacao.participants_count,
-                                competitor_id=cid_str,
-                                competitor_name=concorrente.name,
-                                competitor_url=concorrente.url_original,
+                                competitor_id=str(principal.competitor_id),
+                                competitor_name=meta.get("name"),
+                                competitor_url=meta.get("url"),
                             )
                             logger.info(
-                                "notificacao_concorrente_enfileirada",
+                                "notificacao_enfileirada",
                                 produto_id=str(mid),
-                                concorrente_id=cid_str,
                                 alert_type=c_alert_type,
-                                signal_type=sig.signal_type,
+                                concorrente_id=str(principal.competitor_id),
+                                comparison_id=str(comparacao.id),
+                                run_id=run_id,
+                            )
+                        else:
+                            logger.debug(
+                                "notificacao_sem_alerta",
+                                produto_id=str(mid),
+                                sinais=sinais,
                                 run_id=run_id,
                             )
 
@@ -449,10 +466,11 @@ def notification_task(
     Args:
         monitored_id:   UUID do MonitoredProduct (string).
         comparison_id:  UUID da Comparison que gerou o alerta (string).
-        alert_type:     Tipo consolidado: price_drop_alert, competitive_position_alert, etc.
+        alert_type:     Tipo do evento (ver event_types.DELIVERABLE_ALERT_TYPES).
         reason_codes:   Sinais técnicos que motivaram o alerta (para auditoria).
         market_min_old: Preço mínimo de mercado antes (string Decimal) ou None.
         market_min_new: Preço mínimo de mercado depois (string Decimal) ou None.
+        competitor_id:  UUID do concorrente quando o evento é competitor_*.
     """
     from app.notifications.notifications_service import (
         NotificationPayload,

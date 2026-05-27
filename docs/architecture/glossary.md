@@ -17,7 +17,7 @@ Versao: 1.1
 - Mercado consolidado: o estado de mercado de uma rodada especifica, pronto para ser usado como base de decisao operacional (agendamento, comparacao, alerta).
 - Snapshot elegivel: um `Comparison` cujo `run_status` e `complete` e `valid_competitors_count >= notification_min_quorum`. Apenas snapshots elegiveis geram notificacoes.
 - Rodada degradada: rodada cujo `run_status` e `partial`, `no_competitors` ou `expired`. O snapshot e persistido para auditoria, mas o pipeline de notificacao e bloqueado.
-- Sinal de alerta: sinal tecnico derivado da comparacao de dois snapshots (`price_drop`, `price_rise`, `status_changed`, `ranking_changed`, `market_min_changed`). Multiplos sinais sao consolidados em um unico alerta publico.
+- Sinal de alerta: sinal tecnico derivado da comparacao de dois snapshots consecutivos. Multiplos sinais sao avaliados em hierarquia — o primeiro grupo ativado gera um unico alerta publico por comparacao.
 - Ciclo de vida do produto: conjunto de transicoes de status do produto monitorado (`pending`, `active`, `unavailable`, `error`, `paused`, `unsupported`). Controlado pela coleta e pelo usuario, nao pelo mercado.
 - Decisao operacional: acao tomada com base no estado de mercado — agendamento da proxima coleta, elegibilidade de notificacao, calculo de tendencia e estabilidade. Distinta da gestao do ciclo de vida do produto.
 
@@ -51,21 +51,35 @@ Versao: 1.1
 
 ## Alertas
 
-- `price_drop_alert`: queda de preco do produto monitorado acima do threshold.
-- `price_rise_alert`: alta de preco do produto monitorado acima do threshold.
-- `competitive_position_alert`: mudanca competitiva relevante.
-- `availability_alert`: mudanca de disponibilidade do produto.
-- `error_alert`: alerta operacional de problema de coleta quando usado.
+Tipos entregues ao usuario (ver `event_types.DELIVERABLE_ALERT_TYPES`):
+
+- `competitive_threat_alert`: posicao competitiva piorou — ranking, status ou gap em relacao ao mercado.
+- `competitive_opportunity_alert`: posicao melhorou ou mercado ficou menos agressivo.
+- `market_movement_alert`: menor preco de mercado mudou sem impacto direto na posicao da referencia.
+- `reference_availability_alert`: produto de referencia mudou disponibilidade.
+- `competitor_price_movement_alert`: concorrente especifico teve variacao de preco relevante.
+- `competitor_availability_alert`: concorrente especifico mudou disponibilidade.
+
+Evento de auditoria (ver `event_types.AUDIT_EVENT_TYPES`) — nunca entregue ao usuario:
+
+- `notification_suppressed`: registra supressoes operacionais (rodada degradada, quorum insuficiente).
 
 ## Sinais tecnicos
 
-- `price_drop`: preco do produto caiu.
-- `price_rise`: preco do produto subiu.
-- `status_changed`: status competitivo mudou.
-- `ranking_changed`: ranking mudou de forma relevante.
+Sinais primarios (avaliados por `build_signals()` e `decide_alert()`):
+
+- `ranking_worsened` / `ranking_improved`: ranking do produto monitorado piorou ou melhorou.
+- `status_worsened` / `status_improved`: status competitivo degradou ou melhorou.
+- `gap_increased` / `gap_decreased`: distancia para o preco minimo de mercado aumentou ou diminuiu.
+- `market_became_more_aggressive` / `market_became_less_aggressive`: mercado ficou mais ou menos agressivo.
 - `market_min_changed`: menor preco de mercado mudou acima do threshold.
-- `product_unavailable`: produto ficou indisponivel.
-- `product_available`: produto voltou a ficar disponivel.
+- `reference_became_unavailable` / `reference_became_available`: produto de referencia mudou disponibilidade.
+- `reference_price_drop` / `reference_price_rise`: variacao de preco da referencia — entram em `reason_codes`, mas nao geram alerta sozinhos.
+
+Sinais de concorrente (avaliados por `build_competitor_signals()`, fallback quando nenhum sinal primario gera alerta):
+
+- `price_movement`: concorrente teve variacao de preco relevante.
+- `availability_change`: concorrente mudou disponibilidade.
 
 ## Marketplaces
 

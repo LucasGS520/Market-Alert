@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infra.config import settings
 from app.infra.clients.ntfy import send_ntfy
-from app.notifications.event_types import AUDIT_ONLY_TYPES, DELIVERABLE_TYPES
+from app.notifications.event_types import AUDIT_EVENT_TYPES, DELIVERABLE_ALERT_TYPES
 from app.notifications.notifications_model import NotificationLog
 from app.workers.redis import is_in_cooldown, set_cooldown
 
@@ -71,15 +71,7 @@ def _montar_mensagem(
     """Retorna (titulo, mensagem) para o alert_type dado. URL vai no header Click, não aqui."""
     reason_codes = reason_codes or []
 
-    if alert_type == "availability_alert":
-        if "product_unavailable" in reason_codes:
-            titulo = f"Produto indisponível — {nome_produto}"
-            mensagem = "O produto ficou indisponível."
-        else:
-            titulo = f"Produto disponível — {nome_produto}"
-            mensagem = "O produto voltou a ficar disponível."
-
-    elif alert_type == "competitive_threat_alert":
+    if alert_type == "competitive_threat_alert":
         titulo = f"Ameaça competitiva — {nome_produto}"
         if "ranking_worsened" in reason_codes and old_ranking is not None and new_ranking is not None:
             mensagem = f"Você perdeu posição no ranking ({old_ranking}º → {new_ranking}º)."
@@ -123,13 +115,10 @@ def _montar_mensagem(
             titulo = f"Referência disponível — {nome_produto}"
             mensagem = "O produto de referência voltou a ficar disponível."
 
-    elif alert_type == "competitor_movement_alert":
+    elif alert_type == "competitor_price_movement_alert":
         nome_conc = competitor_name or "Concorrente"
-        titulo = f"Movimento de concorrente — {nome_produto}"
-        if "price_movement" in reason_codes:
-            mensagem = f"{nome_conc} alterou o preço significativamente."
-        else:
-            mensagem = f"{nome_conc} sofreu variação relevante."
+        titulo = f"Variação de preço — {nome_produto}"
+        mensagem = f"{nome_conc} alterou o preço significativamente."
 
     elif alert_type == "competitor_availability_alert":
         nome_conc = competitor_name or "Concorrente"
@@ -216,7 +205,7 @@ async def _ja_entregue(
     comparison_id: uuid.UUID | None,
     alert_type: str,
 ) -> bool:
-    """Verifica se já houve entrega com sucesso para a mesma comparação e alert_type."""
+    """Verifica se já houve entrega com sucesso para a mesma comparação e event_type."""
     if not comparison_id:
         return False
     result = await session.scalar(
@@ -241,13 +230,13 @@ async def send_notification(
     Raises:
         RetryableDeliveryError: se o envio falhou com erro retryable.
     """
-    if payload.alert_type in AUDIT_ONLY_TYPES:
+    if payload.alert_type in AUDIT_EVENT_TYPES:
         raise ValueError(
             f"Tipo '{payload.alert_type}' é exclusivo de auditoria e não pode ser entregue via ntfy."
         )
-    if payload.alert_type not in DELIVERABLE_TYPES:
+    if payload.alert_type not in DELIVERABLE_ALERT_TYPES:
         raise ValueError(
-            f"Tipo '{payload.alert_type}' não está em DELIVERABLE_TYPES e não pode ser entregue."
+            f"Tipo '{payload.alert_type}' não está em DELIVERABLE_ALERT_TYPES e não pode ser entregue."
         )
 
     if not settings.ntfy_topic:
@@ -348,14 +337,12 @@ async def registrar_supressao(
     """Registra supressão pré-decisão como delivery_status='skipped'.
 
     Usado quando o pipeline decide não calcular sinais (rodada degradada,
-    quorum insuficiente). O event_type é collection_health_alert porque a
-    causa é sempre operacional, não competitiva. O caller é responsável pelo
-    session.commit() após a chamada.
+    quorum insuficiente). O caller é responsável pelo session.commit() após a chamada.
     """
     session.add(NotificationLog(
         monitored_id=monitored_id,
         comparison_id=comparison_id,
-        event_type="collection_health_alert",
+        event_type="notification_suppressed",
         delivery_status="skipped",
         message=f"Notificação suprimida: {skip_reason}",
         attempt_count=0,

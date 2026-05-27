@@ -135,9 +135,6 @@ def decide_alert(sinais: list[str]) -> AlertDecision | None:
     return None
 
 
-# ── Tier 2: sinais e decisões por concorrente ──────────────────────────────
-
-
 @dataclass(slots=True)
 class CompetitorSignal:
     competitor_id: uuid.UUID

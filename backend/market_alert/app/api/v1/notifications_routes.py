@@ -18,11 +18,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infra.database import get_session
-from app.notifications.event_types import ALL_TYPES
+from app.notifications.event_types import ALL_NOTIFICATION_EVENT_TYPES
 from app.notifications.notifications_schemas import NotificationLogRead
 from app.notifications.notifications_service import get_notification, list_notifications
 
-_EVENT_TYPE_ENUM = sorted(ALL_TYPES)
+_EVENT_TYPE_ENUM = sorted(ALL_NOTIFICATION_EVENT_TYPES)
 DeliveryStatus = Literal["pending", "sent", "failed", "skipped"]
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
@@ -45,7 +45,7 @@ async def list_notifications_endpoint(
     Lista tentativas de notificação com filtros opcionais.
 
     - **monitored_id**: filtra por produto monitorado.
-    - **event_type**: qualquer tipo presente em `event_types.ALL_TYPES` (ativos, auditoria, inativos ou legados).
+    - **event_type**: qualquer tipo presente em `event_types.ALL_NOTIFICATION_EVENT_TYPES`.
     - **delivery_status**: pending, sent, failed ou skipped.
     - **competitor_id**: filtra eventos Tier 2 de um concorrente específico.
     - **from** / **to**: intervalo de data (ISO 8601).

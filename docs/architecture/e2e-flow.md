@@ -32,7 +32,7 @@ O sistema opera como uma pipeline assincrona:
 4. O scraper detecta marketplace e usa o adapter do Mercado Livre.
 5. Resultado valido gera historico de preco e atualiza estado do produto.
 6. Erro semantico atualiza status e reagendamento conforme classificacao.
-7. Mudanca de disponibilidade do produto pode enfileirar `availability_alert`.
+7. Mudanca de disponibilidade da oferta de referencia sera avaliada pelo pipeline de comparacao.
 
 ## Rodada coordenada
 
@@ -65,18 +65,18 @@ O snapshot representa o **mercado monitorado**, nao apenas o produto monitorado.
 
 ## Notificacao
 
-1. A comparacao coleta sinais tecnicos separados por classe:
-   - **Sinais da referencia**: `price_drop`, `price_rise`, `status_changed`, `ranking_changed`.
-   - **Sinais de mercado**: `market_min_changed`.
-2. Sinais sao consolidados em no maximo um alerta publico por comparacao, por classe:
-   - Sinais de preco da referencia → `price_drop_alert` ou `price_rise_alert`.
-   - Sinais de posicao da referencia → `competitive_position_alert`.
-   - Sinais de mercado sem referencia → `market_alert`.
-3. Sinais da referencia so sao coletados quando `reference_available == True`.
-4. A notificacao e bloqueada quando a rodada e manual, degradada ou sem quorum minimo.
-5. `notification_task` entrega via ntfy se configurado.
-6. Tentativas de entrega sao registradas em PostgreSQL.
-7. Cooldown por produto e tipo de alerta e gravado em Redis.
+1. `comparison_task` constroi sinais tecnicos comparando o snapshot anterior com o atual via `build_signals()`.
+2. `decide_alert(sinais)` aplica hierarquia de prioridade: Threat > Opportunity > MarketMovement > ReferenceAvailability.
+3. Se ha decisao primaria, uma unica `notification_task` e enfileirada com o tipo correspondente.
+4. Se nao ha decisao primaria, o pipeline avalia concorrentes via `build_competitor_signals()`:
+   - Sinal `price_movement` → `competitor_price_movement_alert`.
+   - Sinal `availability_change` → `competitor_availability_alert`.
+   - `price_movement` tem prioridade; apenas um concorrente e escolhido como evento principal.
+5. Sem sinais em nenhuma etapa, nenhuma `notification_task` e enfileirada.
+6. A notificacao e bloqueada quando a rodada e manual, degradada ou sem quorum minimo.
+7. `notification_task` entrega via ntfy se configurado.
+8. Tentativas de entrega sao registradas em PostgreSQL.
+9. Cooldown por produto e tipo de alerta e gravado em Redis.
 
 ## Leitura pela UI
 
@@ -105,4 +105,4 @@ Toda mudanca organizacional deve preservar:
 - O snapshot de mercado deve ser calculado mesmo quando a oferta de referencia estiver indisponivel.
 - `ranking`, `status` e `potential_adjustment` so devem ser preenchidos quando `reference_available == True`.
 - Sinais da referencia (`status_changed`, `ranking_changed`) nao devem disparar quando `comparacao.status is None`.
-- `market_alert` e `competitive_position_alert` sao classes distintas; nao misturar causas.
+- Alertas competitivos (`competitive_threat_alert`, `competitive_opportunity_alert`) e alertas de mercado (`market_movement_alert`) sao classes distintas — nao misturar causas (posicao competitiva vs. movimento de mercado sem impacto direto).

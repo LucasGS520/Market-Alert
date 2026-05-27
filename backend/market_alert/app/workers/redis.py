@@ -42,7 +42,7 @@ def release_lock(redis: Redis, key: str, token: str) -> None:
 
 
 # ── Cooldown de notificações ───────────────────────────────────────────────────
-# Granularidade: produto + tipo de evento (+ concorrente para eventos tier 2).
+# Granularidade: produto + tipo de evento.
 # Cooldown de um evento não bloqueia outros eventos do mesmo produto.
 
 def notification_cooldown_key(

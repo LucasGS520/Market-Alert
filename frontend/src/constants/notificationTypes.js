@@ -3,33 +3,24 @@
 // Carregado via script tag antes dos consumidores; expõe globais via window.
 
 const EVENT_META = {
-  // ── Tipos ativos — gerados pelo pipeline atual ─────────────────────────────
-  competitive_threat_alert:      { label: 'Ameaça competitiva',    icon: 'warning',    tone: 'danger'   },
-  competitive_opportunity_alert: { label: 'Oportunidade',          icon: 'trend-up',   tone: 'success'  },
-  market_movement_alert:         { label: 'Movimento de mercado',  icon: 'trend-down', tone: 'info'     },
-  reference_availability_alert:  { label: 'Disponibilidade ref.',  icon: 'eye',        tone: 'warning'  },
-  competitor_movement_alert:     { label: 'Movimento concorrente', icon: 'zap',        tone: 'info'     },
-  competitor_availability_alert: { label: 'Concorrente',           icon: 'eye',        tone: 'info'     },
-
-  // ── Auditoria operacional — nunca entregue ao usuário ──────────────────────
-  collection_health_alert:       { label: 'Saúde de coleta',       icon: 'warning',    tone: 'warning'  },
-
-  // ── Deprecated — pipeline antigo; mantidos para exibir registros históricos ─
-  availability_alert:         { label: 'Disponibilidade',      icon: 'eye',        tone: 'warning'  },
-  price_drop_alert:           { label: 'Queda de preço',       icon: 'arrow-down', tone: 'danger'   },
-  price_rise_alert:           { label: 'Alta de preço',        icon: 'arrow-up',   tone: 'success'  },
-  competitive_position_alert: { label: 'Posição competitiva',  icon: 'target',     tone: 'brand'    },
-  market_alert:               { label: 'Variação de mercado',  icon: 'trend-down', tone: 'info'     },
-  error_alert:                { label: 'Problema de coleta',   icon: 'warning',    tone: 'warning'  },
+  // ── Tier 1 — alertas primários entregáveis ────────────────────────────────
+  competitive_threat_alert:        { label: 'Ameaça competitiva',     icon: 'warning',    tone: 'danger'   },
+  competitive_opportunity_alert:   { label: 'Oportunidade',           icon: 'trend-up',   tone: 'success'  },
+  market_movement_alert:           { label: 'Movimento de mercado',   icon: 'trend-down', tone: 'info'     },
+  reference_availability_alert:    { label: 'Disponibilidade ref.',   icon: 'eye',        tone: 'warning'  },
+  // ── Tier 2 — alertas por concorrente entregáveis ─────────────────────────
+  competitor_price_movement_alert: { label: 'Variação de preço',      icon: 'zap',        tone: 'info'     },
+  competitor_availability_alert:   { label: 'Disponib. concorrente',  icon: 'eye',        tone: 'info'     },
+  // ── Auditoria operacional — nunca entregue ao usuário ─────────────────────
+  notification_suppressed:         { label: 'Supressão operacional',  icon: 'warning',    tone: 'warning'  },
 };
 
 // Grupos usados pelos filtros da tela de Alertas.
-// Contém apenas tipos que o pipeline atual gera — deprecated não aparecem como filtro.
 const TYPE_GROUPS = {
   competitive:  ['competitive_threat_alert', 'competitive_opportunity_alert'],
-  market:       ['market_movement_alert', 'competitor_movement_alert'],
+  market:       ['market_movement_alert', 'competitor_price_movement_alert'],
   availability: ['reference_availability_alert', 'competitor_availability_alert'],
-  collection:   ['collection_health_alert'],
+  collection:   ['notification_suppressed'],
 };
 
 // Tipos que recebem classificação visual 'urgent' no mapNotification.

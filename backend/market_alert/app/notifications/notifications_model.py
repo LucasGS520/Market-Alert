@@ -9,28 +9,15 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.infra.database import Base
 
 EventType = Enum(
-    # Ativos — gerados pelo pipeline atual (ver event_types.ACTIVE_TYPES)
+    # Alertas entregáveis ao usuário via ntfy (ver event_types.DELIVERABLE_ALERT_TYPES)
     "competitive_threat_alert",
     "competitive_opportunity_alert",
     "market_movement_alert",
     "reference_availability_alert",
-    "availability_alert",
-    # Auditoria operacional — nunca entregue ao usuário
-    "collection_health_alert",
-    # Inativos — definidos no schema, sem lógica de geração ainda
-    "competitor_movement_alert",
+    "competitor_price_movement_alert",
     "competitor_availability_alert",
-    # Deprecated — gerados pelo pipeline antigo, podem existir no histórico
-    "price_drop_alert", "price_rise_alert",
-    "competitive_position_alert",
-    "market_alert",
-    "error_alert",
-    # Legacy — nomes antigos sem sufixo _alert, apenas leitura histórica
-    "price_drop", "price_rise", "status_change",
-    "ranking_change",
-    "product_unavailable", "product_available",
-    "market_price_drop", "market_price_rise",
-    "competitor_unavailable", "competitor_available",
+    # Evento operacional — registra supressões pré-decisão, nunca entregue ao usuário
+    "notification_suppressed",
     name="notification_event_type",
 )
 DeliveryStatus = Enum("pending", "sent", "failed", "skipped", name="delivery_status")
@@ -39,6 +26,7 @@ DeliveryStatus = Enum("pending", "sent", "failed", "skipped", name="delivery_sta
 class NotificationLog(Base):
     __tablename__ = "notification_logs"
     __table_args__ = (
+        # Uma entrega por (comparison, event_type) — um evento por comparação por produto.
         Index(
             "uq_notification_comparison_event",
             "comparison_id",

@@ -66,10 +66,9 @@ Contrato:
 - Calcula snapshot de mercado via `calculate_comparison`.
 - O snapshot e calculado com todas as ofertas validas, mesmo sem a referencia.
 - Quando `reference_available == False`, `ranking`, `status` e `potential_adjustment` ficam `None`.
-- Pode persistir comparacao sem notificar quando a rodada esta degradada.
-- Converte sinais tecnicos separados por classe em no maximo um alerta publico:
-  - Sinais da referencia → `competitive_position_alert`.
-  - Sinal de mercado puro → `market_alert`.
+- Pode persistir comparacao sem notificar quando a rodada esta degradada ou sem quorum.
+- Avalia sinais via `decide_alert()` (hierarquia primaria) e `build_competitor_signals()` (fallback de concorrente).
+- Enfileira no maximo uma `notification_task` por comparacao.
 
 ## `notification_task`
 
@@ -94,6 +93,9 @@ notification_task(
     run_id: str | None = None,
     run_status: str | None = None,
     participants_count: int | None = None,
+    competitor_id: str | None = None,
+    competitor_name: str | None = None,
+    competitor_url: str | None = None,
 )
 ```
 

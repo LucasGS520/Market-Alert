@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infra.config import settings
+from app.infra.clients.email import send_email
 from app.infra.clients.ntfy import send_ntfy
 from app.notifications.event_types import AUDIT_EVENT_TYPES, DELIVERABLE_ALERT_TYPES
 from app.notifications.notifications_model import NotificationLog
@@ -124,6 +125,10 @@ def _montar_mensagem(
         nome_conc = competitor_name or "Concorrente"
         titulo = f"Disponibilidade de concorrente — {nome_produto}"
         mensagem = f"{nome_conc} mudou sua disponibilidade."
+
+    elif alert_type == "collection_health_alert":
+        titulo = f"Coleta falhou — {nome_produto}"
+        mensagem = "Não foi possível coletar os dados de um item monitorado deste grupo."
 
     else:
         titulo = f"Alerta — {nome_produto}"
@@ -239,9 +244,12 @@ async def send_notification(
             f"Tipo '{payload.alert_type}' não está em DELIVERABLE_ALERT_TYPES e não pode ser entregue."
         )
 
-    if not settings.ntfy_topic:
+    _ntfy_ativo = bool(settings.ntfy_topic)
+    _email_ativo = bool(settings.smtp_host and settings.smtp_to)
+
+    if not _ntfy_ativo and not _email_ativo:
         logger.debug(
-            "notificacao_ignorada_ntfy_desabilitado",
+            "notificacao_ignorada_sem_canais_configurados",
             produto_id=str(payload.monitored_id),
             alert_type=payload.alert_type,
         )
@@ -286,8 +294,9 @@ async def send_notification(
     )
 
     try:
-        click_url = payload.competitor_url or product_url
-        await send_ntfy(settings.ntfy_url, settings.ntfy_topic, titulo, mensagem, click_url=click_url)
+        if _ntfy_ativo:
+            click_url = payload.competitor_url or product_url
+            await send_ntfy(settings.ntfy_url, settings.ntfy_topic, titulo, mensagem, click_url=click_url)
 
         log_id = _registrar_tentativa(session, payload, titulo, mensagem, falhou=False, erro=None)
         await session.commit()
@@ -322,6 +331,34 @@ async def send_notification(
         await session.commit()
         if retryable:
             raise RetryableDeliveryError(str(exc)) from exc
+        return  # falha não-retryable: não tenta e-mail
+
+    # ── Canal e-mail (best-effort — falha não bloqueia nem faz retry) ─────────
+    if _email_ativo:
+        try:
+            await send_email(
+                smtp_host=settings.smtp_host,
+                smtp_port=settings.smtp_port,
+                username=settings.smtp_username,
+                password=settings.smtp_password,
+                from_addr=settings.smtp_from,
+                to_addr=settings.smtp_to,
+                subject=titulo,
+                body=mensagem,
+                use_tls=settings.smtp_use_tls,
+            )
+            logger.info(
+                "email_enviado",
+                produto_id=str(payload.monitored_id),
+                alert_type=payload.alert_type,
+            )
+        except Exception as email_exc:
+            logger.warning(
+                "email_falhou",
+                produto_id=str(payload.monitored_id),
+                alert_type=payload.alert_type,
+                erro=str(email_exc),
+            )
 
 
 # ── Auditoria ──────────────────────────────────────────────────────────────────
@@ -369,6 +406,8 @@ async def list_notifications(
         stmt = stmt.where(NotificationLog.monitored_id == monitored_id)
     if event_type is not None:
         stmt = stmt.where(NotificationLog.event_type == event_type)
+    else:
+        stmt = stmt.where(NotificationLog.event_type.notin_(AUDIT_EVENT_TYPES))
     if delivery_status is not None:
         stmt = stmt.where(NotificationLog.delivery_status == delivery_status)
     if date_from is not None:

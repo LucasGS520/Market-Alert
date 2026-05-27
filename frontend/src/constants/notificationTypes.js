@@ -3,16 +3,15 @@
 // Carregado via script tag antes dos consumidores; expõe globais via window.
 
 const EVENT_META = {
-  // ── Tier 1 — alertas primários entregáveis ────────────────────────────────
+  // ── Alertas de mercado e posição competitiva ──────────────────────────────
   competitive_threat_alert:        { label: 'Ameaça competitiva',     icon: 'warning',    tone: 'danger'   },
   competitive_opportunity_alert:   { label: 'Oportunidade',           icon: 'trend-up',   tone: 'success'  },
   market_movement_alert:           { label: 'Movimento de mercado',   icon: 'trend-down', tone: 'info'     },
   reference_availability_alert:    { label: 'Disponibilidade ref.',   icon: 'eye',        tone: 'warning'  },
-  // ── Tier 2 — alertas por concorrente entregáveis ─────────────────────────
   competitor_price_movement_alert: { label: 'Variação de preço',      icon: 'zap',        tone: 'info'     },
   competitor_availability_alert:   { label: 'Disponib. concorrente',  icon: 'eye',        tone: 'info'     },
-  // ── Auditoria operacional — nunca entregue ao usuário ─────────────────────
-  notification_suppressed:         { label: 'Supressão operacional',  icon: 'warning',    tone: 'warning'  },
+  // ── Alertas de coleta ─────────────────────────────────────────────────────
+  collection_health_alert:         { label: 'Coleta falhou',          icon: 'alert',      tone: 'warning'  },
 };
 
 // Grupos usados pelos filtros da tela de Alertas.
@@ -20,7 +19,7 @@ const TYPE_GROUPS = {
   competitive:  ['competitive_threat_alert', 'competitive_opportunity_alert'],
   market:       ['market_movement_alert', 'competitor_price_movement_alert'],
   availability: ['reference_availability_alert', 'competitor_availability_alert'],
-  collection:   ['notification_suppressed'],
+  collection:   ['collection_health_alert'],
 };
 
 // Tipos que recebem classificação visual 'urgent' no mapNotification.

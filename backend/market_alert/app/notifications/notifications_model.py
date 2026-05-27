@@ -16,6 +16,7 @@ EventType = Enum(
     "reference_availability_alert",
     "competitor_price_movement_alert",
     "competitor_availability_alert",
+    "collection_health_alert",
     # Evento operacional — registra supressões pré-decisão, nunca entregue ao usuário
     "notification_suppressed",
     name="notification_event_type",

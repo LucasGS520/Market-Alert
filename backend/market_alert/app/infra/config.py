@@ -16,9 +16,19 @@ class Settings(BaseSettings):
     # Deve ser maior que max_total_request_seconds do market_scraper.
     scraper_timeout_seconds: float = 270.0
 
-    # ── Notificações ───────────────────────────────────────────────────────
+    # ── Notificações — ntfy ────────────────────────────────────────────────
     ntfy_url: str = "https://ntfy.sh"
     ntfy_topic: str | None = None
+
+    # ── Notificações — e-mail (SMTP) ───────────────────────────────────────
+    # smtp_host=None desativa o canal silenciosamente (mesmo padrão de ntfy_topic=None).
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_username: str | None = None
+    smtp_password: str | None = None
+    smtp_from: str = "Market Alert <noreply@market-alert.local>"
+    smtp_to: str | None = None      # destinatário dos alertas
+    smtp_use_tls: bool = True       # False para Mailpit local (porta 1025)
 
     # ── Regras de Negócio de Notificação ──────────────────────────────────
     notification_delta_percent: float = 5.0

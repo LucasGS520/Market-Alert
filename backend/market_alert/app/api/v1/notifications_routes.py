@@ -1,9 +1,9 @@
 """
 Router: notificações.
 
-Endpoints para consultar o histórico de alertas.
-Cada registro representa uma entrega, falha ou supressão de notificação —
-incluindo bloqueios operacionais auditáveis.
+Endpoints para consultar o histórico de alertas entregáveis ao usuário.
+Eventos de auditoria interna (AUDIT_EVENT_TYPES) são excluídos da listagem
+padrão — use event_type explícito para consultá-los se necessário.
 
 Endpoints:
     GET /notifications                    → listagem com filtros
@@ -47,7 +47,7 @@ async def list_notifications_endpoint(
     - **monitored_id**: filtra por produto monitorado.
     - **event_type**: qualquer tipo presente em `event_types.ALL_NOTIFICATION_EVENT_TYPES`.
     - **delivery_status**: pending, sent, failed ou skipped.
-    - **competitor_id**: filtra eventos Tier 2 de um concorrente específico.
+    - **competitor_id**: filtra eventos de um concorrente específico.
     - **from** / **to**: intervalo de data (ISO 8601).
     - **limit**: máximo de registros retornados (padrão 50, máximo 200).
     """

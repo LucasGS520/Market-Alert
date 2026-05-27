@@ -9,6 +9,8 @@ DELIVERABLE_ALERT_TYPES: frozenset[str] = frozenset({
     # competitor_* — movimento específico de concorrente (gerados via build_competitor_signals())
     "competitor_price_movement_alert",
     "competitor_availability_alert",
+    # collection_* — falha técnica de coleta para qualquer entidade do grupo monitorado
+    "collection_health_alert",
 })
 
 AUDIT_EVENT_TYPES: frozenset[str] = frozenset({

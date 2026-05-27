@@ -54,9 +54,13 @@ function PriceChart({ series, height = 220 }) {
   };
 
   const productSeries = activeSeries[0];
-  const productPath = buildPath(productSeries.data);
-  const firstPt = productSeries.data[0];
-  const lastPt = productSeries.data[productSeries.data.length - 1];
+  // Se o produto tem 1 único ponto, sintetiza um segundo ponto no tMax para mostrar linha horizontal
+  const productData = productSeries.data.length === 1
+    ? [productSeries.data[0], { t: new Date(tMax).toISOString(), v: productSeries.data[0].v }]
+    : productSeries.data;
+  const productPath = buildPath(productData);
+  const firstPt = productData[0];
+  const lastPt = productData[productData.length - 1];
   const fillPath = productPath
     ? productPath + ` L ${toX(lastPt.t).toFixed(1)},${H - PADY} L ${toX(firstPt.t).toFixed(1)},${H - PADY} Z`
     : null;
@@ -113,7 +117,8 @@ function PriceChart({ series, height = 220 }) {
       + ' ' + d.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
   };
 
-  const seriesWithLines = activeSeries.filter(s => s.data.length >= 2);
+  // Produto sempre tem linha (ponto único é estendido ao tMax), outras séries precisam de 2+ pontos
+  const seriesWithLines = activeSeries.filter(s => s === productSeries ? productPath : s.data.length >= 2);
 
   return (
     <div>
@@ -174,11 +179,11 @@ function PriceChart({ series, height = 220 }) {
             );
           })}
 
-          {/* Marcador no último ponto do produto */}
+          {/* Marcador no último ponto real do produto */}
           {productPath && !hover && (
             <>
-              <circle cx={toX(lastPt.t)} cy={toY(lastPt.v)} r="4" fill={productSeries.color}/>
-              <circle cx={toX(lastPt.t)} cy={toY(lastPt.v)} r="9" fill={productSeries.color} opacity="0.15"/>
+              <circle cx={toX(productSeries.data[productSeries.data.length - 1].t)} cy={toY(productSeries.data[productSeries.data.length - 1].v)} r="4" fill={productSeries.color}/>
+              <circle cx={toX(productSeries.data[productSeries.data.length - 1].t)} cy={toY(productSeries.data[productSeries.data.length - 1].v)} r="9" fill={productSeries.color} opacity="0.15"/>
             </>
           )}
 

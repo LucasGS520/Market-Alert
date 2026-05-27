@@ -118,14 +118,30 @@ def collector_task(
                 except ScraperUnavailableError:
                     return
 
+                coleta_ok = resultado.get("success", False)
+                razao_produto = resultado.get("reason")
+
                 logger.info(
                     "collector_task_concluido",
                     fase="produto",
                     produto_id=product_id,
-                    sucesso=resultado.get("success", False),
-                    razao=resultado.get("reason"),
+                    sucesso=coleta_ok,
+                    razao=razao_produto,
                     duracao_s=round(time.monotonic() - inicio, 2),
                 )
+
+                if not coleta_ok and razao_produto not in ("unavailable", "lock_busy"):
+                    notification_task.delay(
+                        monitored_id=product_id,
+                        comparison_id=None,
+                        alert_type="collection_health_alert",
+                        old_price=None,
+                        new_price=None,
+                        old_status=None,
+                        new_status=None,
+                        product_url=produto.url_original,
+                        product_name=produto.name,
+                    )
 
                 curr_available = produto.is_available
 
@@ -176,6 +192,22 @@ def collector_task(
                 elif resultado.get("availability_changed"):
                     # Disponibilidade do concorrente mudou; recalcula posição competitiva
                     comparison_task.delay(monitored_id=monitored_id_str)
+
+                _RAZOES_ESPERADAS = ("unavailable", "lock_busy", "ineligible_status", "unsupported")
+                if not coleta_ok and razao not in _RAZOES_ESPERADAS:
+                    produto_dono = await session.get(MonitoredProduct, concorrente.monitored_id)
+                    if produto_dono:
+                        notification_task.delay(
+                            monitored_id=monitored_id_str,
+                            comparison_id=None,
+                            alert_type="collection_health_alert",
+                            old_price=None,
+                            new_price=None,
+                            old_status=None,
+                            new_status=None,
+                            product_url=produto_dono.url_original,
+                            product_name=produto_dono.name,
+                        )
 
                 logger.info(
                     "collector_task_concluido",
